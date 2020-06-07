@@ -207,7 +207,7 @@ def test(cfg,
             from pycocotools.cocoeval import COCOeval
 
             # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-            cocoGt = COCO(glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
+            cocoGt = COCO(glob.glob('data/coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
             cocoDt = cocoGt.loadRes('results.json')  # initialize COCO pred api
 
             cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
@@ -215,6 +215,7 @@ def test(cfg,
             cocoEval.evaluate()
             cocoEval.accumulate()
             cocoEval.summarize()
+
             # mf1, map = cocoEval.stats[:2]  # update to pycocotools results (mAP@0.5:0.95, mAP@0.5)
         except:
             print('WARNING: pycocotools must be installed with numpy==1.17 to run correctly. '

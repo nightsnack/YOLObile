@@ -1,0 +1,8 @@
+mixup:
+  True
+alpha:
+  0.3
+smooth:
+  True
+smooth-eps:
+  0.1

@@ -1,0 +1,24 @@
+admm:
+  True
+masked-retrain:
+  False
+admm-epochs:
+  1
+rho:
+  0.0001
+rho-num:
+  4
+sparsity-type:
+  column
+config-file:
+  config_yolov3spp_v00
+combine-progressive:
+  False
+verbose:
+  True
+logger:
+  True
+log-interval:
+  10
+no-tricks:
+  False

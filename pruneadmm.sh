@@ -1,0 +1,1 @@
+python train.py --img-size 320 --batch-size 64 --device 0,1,2,3 --epoch 25

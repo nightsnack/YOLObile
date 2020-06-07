@@ -1,12 +1,18 @@
 import argparse
+import logging
+from time import strftime
 
 import torch.distributed as dist
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
+import yaml
 from torch.utils.tensorboard import SummaryWriter
 
+import admm
 import test  # import test.py to get mAP after each epoch
+from admm import GradualWarmupScheduler
 from models import *
+from testers import test_sparsity
 from utils.datasets import *
 from utils.utils import *
 
@@ -29,7 +35,7 @@ hyp = {'giou': 3.54,  # giou loss gain
        'obj': 64.3,  # obj loss gain (*=img_size/320 if img_size != 320)
        'obj_pw': 1.0,  # obj BCELoss positive_weight
        'iou_t': 0.20,  # iou training threshold
-       'lr0': 0.01,  # initial learning rate (SGD=5E-3, Adam=5E-4)
+       'lr0': 5E-3,  # initial learning rate (SGD=5E-3, Adam=5E-4)
        'lrf': 0.0005,  # final learning rate (with cos scheduler)
        'momentum': 0.937,  # SGD momentum
        'weight_decay': 0.0005,  # optimizer weight decay
@@ -55,6 +61,10 @@ if hyp['fl_gamma']:
 
 
 def train(hyp):
+    # batch_time = AverageMeter()
+    # data_time = AverageMeter()
+    # losses = AverageMeter()
+
     cfg = opt.cfg
     data = opt.data
     epochs = opt.epochs  # 500200 batches at bs 64, 117263 images = 273 epochs
@@ -91,6 +101,7 @@ def train(hyp):
     model = Darknet(cfg).to(device)
 
     # Optimizer
+
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
     for k, v in dict(model.named_parameters()).items():
         if '.bias' in k:
@@ -114,35 +125,7 @@ def train(hyp):
     start_epoch = 0
     best_fitness = 0.0
     attempt_download(weights)
-    if weights.endswith('.pt'):  # pytorch format
-        # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-        chkpt = torch.load(weights, map_location=device)
 
-        # load model
-        try:
-            chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-            model.load_state_dict(chkpt['model'], strict=False)
-        except KeyError as e:
-            s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
-                "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
-            raise KeyError(s) from e
-
-        # load optimizer
-        if chkpt['optimizer'] is not None:
-            optimizer.load_state_dict(chkpt['optimizer'])
-            best_fitness = chkpt['best_fitness']
-
-        # load results
-        if chkpt.get('training_results') is not None:
-            with open(results_file, 'w') as file:
-                file.write(chkpt['training_results'])  # write results.txt
-
-        start_epoch = chkpt['epoch'] + 1
-        del chkpt
-
-    elif len(weights) > 0:  # darknet format
-        # possible weights are '*.weights', 'yolov3-tiny.conv.15',  'darknet53.conv.74' etc.
-        load_darknet_weights(model, weights)
 
     # Mixed precision training https://github.com/NVIDIA/apex
     if mixed_precision:
@@ -165,15 +148,6 @@ def train(hyp):
     # plt.tight_layout()
     # plt.savefig('LR.png', dpi=300)
 
-    # Initialize distributed training
-    if device.type != 'cpu' and torch.cuda.device_count() > 1 and torch.distributed.is_available():
-        dist.init_process_group(backend='nccl',  # 'distributed backend'
-                                init_method='tcp://127.0.0.1:9999',  # distributed training init method
-                                world_size=1,  # number of nodes for distributed training
-                                rank=0)  # distributed training node rank
-        model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
-        model.yolo_layers = model.module.yolo_layers  # move yolo layer indices to top level
-
     # Dataset
     dataset = LoadImagesAndLabels(train_path, img_size, batch_size,
                                   augment=True,
@@ -188,7 +162,8 @@ def train(hyp):
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              num_workers=nw,
-                                             shuffle=not opt.rect,  # Shuffle=True unless rectangular training is used
+                                             shuffle=not opt.rect,
+                                             # Shuffle=True unless rectangular training is used
                                              pin_memory=True,
                                              collate_fn=dataset.collate_fn)
 
@@ -203,175 +178,511 @@ def train(hyp):
                                              pin_memory=True,
                                              collate_fn=dataset.collate_fn)
 
-    # Model parameters
-    model.nc = nc  # attach number of classes to model
-    model.hyp = hyp  # attach hyperparameters to model
-    model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
-    model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device)  # attach class weights
-
-    # Model EMA
-    ema = torch_utils.ModelEMA(model)
-
-    # Start training
-    nb = len(dataloader)  # number of batches
-    n_burn = max(3 * nb, 500)  # burn-in iterations, max(3 epochs, 500 iterations)
-    maps = np.zeros(nc)  # mAP per class
-    # torch.autograd.set_detect_anomaly(True)
-    results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
+    initial_rho = opt.rho
     t0 = time.time()
-    print('Image sizes %g - %g train, %g test' % (imgsz_min, imgsz_max, imgsz_test))
-    print('Using %g dataloader workers' % nw)
-    print('Starting training for %g epochs...' % epochs)
-    for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
-        model.train()
+    """====================="""
+    """ multi-rho admm train"""
+    """====================="""
+    if opt.admm:
+        opt.notest = True
+        # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
+        chkpt = torch.load(weights, map_location=device)
 
-        # Update image weights (optional)
-        if dataset.image_weights:
-            w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
-            image_weights = labels_to_image_weights(dataset.labels, nc=nc, class_weights=w)
-            dataset.indices = random.choices(range(dataset.n), weights=image_weights, k=dataset.n)  # rand weighted idx
+        # load model
+        try:
+            chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+            model.load_state_dict(chkpt['model'], strict=False)
+        except KeyError as e:
+            s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
+                "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
+            raise KeyError(s) from e
 
-        mloss = torch.zeros(4).to(device)  # mean losses
-        print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
-        pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
-        for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-            ni = i + nb * epoch  # number integrated batches (since train start)
-            imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
-            targets = targets.to(device)
+        del chkpt
 
-            # Burn-in
-            if ni <= n_burn:
-                xi = [0, n_burn]  # x interp
-                model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
-                accumulate = max(1, np.interp(ni, xi, [1, 64 / batch_size]).round())
-                for j, x in enumerate(optimizer.param_groups):
-                    # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                    x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
-                    x['weight_decay'] = np.interp(ni, xi, [0.0, hyp['weight_decay'] if j == 1 else 0.0])
-                    if 'momentum' in x:
-                        x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
+        # Initialize distributed training
+        if device.type != 'cpu' and torch.cuda.device_count() > 1 and torch.distributed.is_available():
+            dist.init_process_group(backend='nccl',  # 'distributed backend'
+                                    init_method='tcp://127.0.0.1:9999',  # distributed training init method
+                                    world_size=1,  # number of nodes for distributed training
+                                    rank=0)  # distributed training node rank
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model.yolo_layers = model.module.yolo_layers  # move yolo layer indices to top level
 
-            # Multi-Scale
-            if opt.multi_scale:
-                if ni / accumulate % 1 == 0:  #  adjust img_size (67% - 150%) every 1 batch
-                    img_size = random.randrange(grid_min, grid_max + 1) * gs
-                sf = img_size / max(imgs.shape[2:])  # scale factor
-                if sf != 1:
-                    ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to 32-multiple)
-                    imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
-            # Forward
-            pred = model(imgs)
+        # Model parameters
+        model.nc = nc  # attach number of classes to model
+        model.hyp = hyp  # attach hyperparameters to model
+        model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
+        model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device)  # attach class weights
 
-            # Loss
-            loss, loss_items = compute_loss(pred, targets, model)
-            if not torch.isfinite(loss):
-                print('WARNING: non-finite loss, ending training ', loss_items)
-                return results
+        # Model EMA
+        ema = torch_utils.ModelEMA(model)
 
-            # Backward
-            loss *= batch_size / 64  # scale loss
-            if mixed_precision:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+        # Start training
+        nb = len(dataloader)  # number of batches
+        n_burn = max(int(0.7 * nb), 500)  # burn-in iterations, max(0.7 epochs, 500 iterations)
+        maps = np.zeros(nc)  # mAP per class
+        # torch.autograd.set_detect_anomaly(True)
+        results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
 
-            # Optimize
-            if ni % accumulate == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-                ema.update(model)
+        print('Image sizes %g - %g train, %g test' % (imgsz_min, imgsz_max, imgsz_test))
+        print('Using %g dataloader workers' % nw)
+        print('Starting training for %g epochs...' % epochs)
 
-            # Print
-            mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
-            mem = '%.3gG' % (torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-            s = ('%10s' * 2 + '%10.3g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
-            pbar.set_description(s)
 
-            # Plot
-            if ni < 1:
-                f = 'train_batch%g.jpg' % i  # filename
-                res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+
+        for i in range(opt.rho_num):
+            current_rho = initial_rho * 10 ** i
+            ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=current_rho)
+            admm.admm_initialization(opt, ADMM=ADMM, model=model)  # intialize Z variable
+
+            for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
+                print("current rho: {}".format(current_rho))
+
+                model.train()
+                masks = {}
+                if opt.masked_retrain and not opt.combine_progressive:
+                    print("full acc re-train masking")
+
+                    for name, W in (model.module.named_parameters() if type(
+                            model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                        if name not in ADMM.prune_ratios:
+                            continue
+                        above_threshold, W = admm.weight_pruning(opt, W, ADMM.prune_ratios[name])
+                        W.data = W
+                        masks[name] = above_threshold
+                elif opt.combine_progressive:
+                    print("progressive admm-train/re-train masking")
+                    for name, W in (model.module.named_parameters() if type(
+                            model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                        weight = W.cpu().detach().numpy()
+                        non_zeros = weight != 0
+                        non_zeros = non_zeros.astype(np.float32)
+                        zero_mask = torch.from_numpy(non_zeros).cuda()
+                        W = torch.from_numpy(weight).cuda()
+                        W.data = W
+                        masks[name] = zero_mask
+
+                # Update image weights (optional)
+                if dataset.image_weights:
+                    w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
+                    image_weights = labels_to_image_weights(dataset.labels, nc=nc, class_weights=w)
+                    dataset.indices = random.choices(range(dataset.n), weights=image_weights, k=dataset.n)  # rand weighted idx
+
+                mloss = torch.zeros(4).to(device)  # mean losses
+                print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
+                pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
+                for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+
+                    ni = i + nb * epoch  # number integrated batches (since train start)
+                    imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
+                    targets = targets.to(device)
+
+                    # Burn-in
+                    if ni <= n_burn:
+                        xi = [0, n_burn]  # x interp
+                        model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
+                        accumulate = max(1, np.interp(ni, xi, [1, 64 / batch_size]).round())
+                        for j, x in enumerate(optimizer.param_groups):
+                            # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                            x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                            x['weight_decay'] = np.interp(ni, xi, [0.0, hyp['weight_decay'] if j == 1 else 0.0])
+                            if 'momentum' in x:
+                                x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
+
+                    # Multi-Scale
+                    if opt.multi_scale:
+                        if ni / accumulate % 1 == 0:  #  adjust img_size (67% - 150%) every 1 batch
+                            img_size = random.randrange(grid_min, grid_max + 1) * gs
+                        sf = img_size / max(imgs.shape[2:])  # scale factor
+                        if sf != 1:
+                            ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to 32-multiple)
+                            imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
+
+                    # Forward
+                    pred = model(imgs)
+
+                    # Loss
+                    loss, loss_items = compute_loss(pred, targets, model)
+                    if not torch.isfinite(loss):
+                        print('WARNING: non-finite loss, ending training ', loss_items)
+                        return results
+
+                    # Backward
+                    loss *= batch_size / 64  # scale loss
+
+
+                    admm.z_u_update(opt, ADMM, model, device, dataloader, optimizer, epoch, imgs, i,
+                                        tb_writer)  # update Z and U variables
+                    loss, admm_loss, mixed_loss = admm.append_admm_loss(opt, ADMM, model,
+                                                                            loss)  # append admm losss
+
+                    if mixed_precision:
+                        with amp.scale_loss(mixed_loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                    else:
+                        mixed_loss.backward()
+
+                    if opt.combine_progressive:
+                        with torch.no_grad():
+                            for name, W in (model.module.named_parameters() if type(
+                                    model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                                if name in masks:
+                                    W.grad *= masks[name]
+
+                    # Optimize
+                    if ni % accumulate == 0:
+                        optimizer.step()
+                        optimizer.zero_grad()
+                        ema.update(model)
+
+                    # Print
+                    mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
+                    mem = '%.3gG' % (torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
+                    s = ('%10s' * 2 + '%10.3g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
+                    pbar.set_description(s)
+
+                    # Plot
+                    if ni < 1:
+                        f = 'train_batch%g.jpg' % i  # filename
+                        res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+                        if tb_writer:
+                            tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
+                            # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+
+                    # end batch ------------------------------------------------------------------------------------------------
+
+                # Update scheduler
+                if opt.admm:
+                    admm.admm_adjust_learning_rate(optimizer, epoch, opt)
+                else:
+                    scheduler.step()
+
+                # Process epoch results
+                ema.update_attr(model)
+                final_epoch = epoch + 1 == epochs
+                if not opt.notest or final_epoch:  # Calculate mAP
+                    is_coco = any([x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
+                    results, maps = test.test(cfg,
+                                              data,
+                                              batch_size=batch_size,
+                                              imgsz=imgsz_test,
+                                              model=ema.ema,
+                                              save_json=final_epoch and is_coco,
+                                              single_cls=opt.single_cls,
+                                              dataloader=testloader,
+                                              multi_label=ni > n_burn)
+
+                # Write
+                with open(results_file, 'a') as f:
+                    f.write(s + '%10.3g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
+                if len(opt.name) and opt.bucket:
+                    os.system('gsutil cp results.txt gs://%s/results/results%s.txt' % (opt.bucket, opt.name))
+
+                # Tensorboard
                 if tb_writer:
-                    tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
-                    # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+                    tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
+                            'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/F1',
+                            'val/giou_loss', 'val/obj_loss', 'val/cls_loss']
+                    for x, tag in zip(list(mloss[:-1]) + list(results), tags):
+                        tb_writer.add_scalar(tag, x, epoch)
 
-            # end batch ------------------------------------------------------------------------------------------------
+                # Update best mAP
+                fi = fitness(np.array(results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
+                if fi > best_fitness:
+                    best_fitness = fi
 
-        # Update scheduler
-        scheduler.step()
+                # end epoch ----------------------------------------------------------------------------------------------------
+            # end training
 
-        # Process epoch results
-        ema.update_attr(model)
-        final_epoch = epoch + 1 == epochs
-        if not opt.notest or final_epoch:  # Calculate mAP
-            is_coco = any([x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
-            results, maps = test.test(cfg,
-                                      data,
-                                      batch_size=batch_size,
-                                      imgsz=imgsz_test,
-                                      model=ema.ema,
-                                      save_json=final_epoch and is_coco,
-                                      single_cls=opt.single_cls,
-                                      dataloader=testloader,
-                                      multi_label=ni > n_burn)
+            # admm_adjust_learning_rate ----------------------------------------------------------------------------------------------------
+            admm.admm_adjust_learning_rate(optimizer, epoch, opt)
+            # end admm_adjust_learning_rate ----------------------------------------------------------------------------------------------------
 
-        # Write
-        with open(results_file, 'a') as f:
-            f.write(s + '%10.3g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-        if len(opt.name) and opt.bucket:
-            os.system('gsutil cp results.txt gs://%s/results/results%s.txt' % (opt.bucket, opt.name))
+            print("Saving model.")
+            torch.save(
+                model.module.state_dict() if type(model) is nn.parallel.DistributedDataParallel else model.state_dict(),
+                "./model_prunned/yolov3_{}_{}_{}.pt".format(
+                    current_rho, opt.config_file, opt.sparsity_type))
 
-        # Tensorboard
-        if tb_writer:
-            tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
-                    'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/F1',
-                    'val/giou_loss', 'val/obj_loss', 'val/cls_loss']
-            for x, tag in zip(list(mloss[:-1]) + list(results), tags):
-                tb_writer.add_scalar(tag, x, epoch)
+        if not opt.evolve:
+            plot_results()  # save as results.png
+        print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
+        dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
+        torch.cuda.empty_cache()
+        return results
 
-        # Update best mAP
-        fi = fitness(np.array(results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
-        if fi > best_fitness:
-            best_fitness = fi
 
-        # Save model
-        save = (not opt.nosave) or (final_epoch and not opt.evolve)
-        if save:
-            with open(results_file, 'r') as f:  # create checkpoint
-                chkpt = {'epoch': epoch,
-                         'best_fitness': best_fitness,
-                         'training_results': f.read(),
-                         'model': ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
-                         'optimizer': None if final_epoch else optimizer.state_dict()}
+    """=============="""
+    """masked retrain"""
+    """=============="""
+    if opt.masked_retrain:
+        ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=initial_rho)
+        if not opt.resume:
+            # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
+            print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
+            chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
 
-            # Save last, best and delete
-            torch.save(chkpt, last)
-            if (best_fitness == fi) and not final_epoch:
-                torch.save(chkpt, best)
-            del chkpt
+            # load model
+            try:
+                # chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+                model.load_state_dict(chkpt, strict=False)
+            except KeyError as e:
+                # s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
+                #     "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
+                raise KeyError() from e
+            #----------------------------------------------hard prune------------------------------------------------
+            admm.hard_prune(opt, ADMM, model)
+            #----------------------------------------------hard prune------------------------------------------------
+        else:
+            try:
+                chkpt = torch.load(weights, map_location=device)
+                chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+                model.load_state_dict(chkpt['model'], strict=False)
+            except KeyError as e:
+                # s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
+                #     "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
+                raise KeyError() from e
+            # load optimizer
+            if chkpt['optimizer'] is not None:
+                optimizer.load_state_dict(chkpt['optimizer'])
+                best_fitness = chkpt['best_fitness']
 
-        # end epoch ----------------------------------------------------------------------------------------------------
-    # end training
+            # load results
+            if chkpt.get('training_results') is not None:
+                with open(results_file, 'w') as file:
+                    file.write(chkpt['training_results'])  # write results.txt
 
-    n = opt.name
-    if len(n):
-        n = '_' + n if not n.isnumeric() else n
-        fresults, flast, fbest = 'results%s.txt' % n, wdir + 'last%s.pt' % n, wdir + 'best%s.pt' % n
-        for f1, f2 in zip([wdir + 'last.pt', wdir + 'best.pt', 'results.txt'], [flast, fbest, fresults]):
-            if os.path.exists(f1):
-                os.rename(f1, f2)  # rename
-                ispt = f2.endswith('.pt')  # is *.pt
-                strip_optimizer(f2) if ispt else None  # strip optimizer
-                os.system('gsutil cp %s gs://%s/weights' % (f2, opt.bucket)) if opt.bucket and ispt else None  # upload
+            start_epoch = chkpt['epoch'] + 1
+        del chkpt
 
-    if not opt.evolve:
-        plot_results()  # save as results.png
-    print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
-    dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
-    torch.cuda.empty_cache()
-    return results
+        # Initialize distributed training
+        if device.type != 'cpu' and torch.cuda.device_count() > 1 and torch.distributed.is_available():
+            dist.init_process_group(backend='nccl',  # 'distributed backend'
+                                    init_method='tcp://127.0.0.1:9999',  # distributed training init method
+                                    world_size=1,  # number of nodes for distributed training
+                                    rank=0)  # distributed training node rank
+            model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
+            model.yolo_layers = model.module.yolo_layers  # move yolo layer indices to top level
+
+            # Model parameters
+        model.nc = nc  # attach number of classes to model
+        model.hyp = hyp  # attach hyperparameters to model
+        model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
+        model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device)  # attach class weights
+
+        # Model EMA
+        ema = torch_utils.ModelEMA(model)
+
+        # Start training
+        nb = len(dataloader)  # number of batches
+        n_burn = max(3 * nb, 500)  # burn-in iterations, max(3 epochs, 500 iterations)
+        maps = np.zeros(nc)  # mAP per class
+        # torch.autograd.set_detect_anomaly(True)
+        results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
+        print('Image sizes %g - %g train, %g test' % (imgsz_min, imgsz_max, imgsz_test))
+        print('Using %g dataloader workers' % nw)
+        print('Starting training for %g epochs...' % epochs)
+        for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
+            model.train()
+
+            if opt.masked_retrain and not opt.combine_progressive:
+                print("full acc re-train masking")
+                masks = {}
+                for name, W in (model.module.named_parameters() if type(
+                        model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                    if name not in ADMM.prune_ratios:
+                        continue
+                    above_threshold, W = admm.weight_pruning(opt, W, ADMM.prune_ratios[name])
+                    W.data = W
+                    masks[name] = above_threshold
+            elif opt.combine_progressive:
+                print("progressive admm-train/re-train masking")
+                masks = {}
+                for name, W in (model.module.named_parameters() if type(
+                        model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                    weight = W.cpu().detach().numpy()
+                    non_zeros = weight != 0
+                    non_zeros = non_zeros.astype(np.float32)
+                    zero_mask = torch.from_numpy(non_zeros).cuda()
+                    W = torch.from_numpy(weight).cuda()
+                    W.data = W
+                    masks[name] = zero_mask
+
+            # Update image weights (optional)
+            if dataset.image_weights:
+                w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
+                image_weights = labels_to_image_weights(dataset.labels, nc=nc, class_weights=w)
+                dataset.indices = random.choices(range(dataset.n), weights=image_weights,
+                                                 k=dataset.n)  # rand weighted idx
+
+            mloss = torch.zeros(4).to(device)  # mean losses
+            print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
+            pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
+            for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+
+                ni = i + nb * epoch  # number integrated batches (since train start)
+                imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
+                targets = targets.to(device)
+
+                # Burn-in
+                if ni <= n_burn:
+                    xi = [0, n_burn]  # x interp
+                    model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
+                    accumulate = max(1, np.interp(ni, xi, [1, 64 / batch_size]).round())
+                    for j, x in enumerate(optimizer.param_groups):
+                        # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                        x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                        x['weight_decay'] = np.interp(ni, xi, [0.0, hyp['weight_decay'] if j == 1 else 0.0])
+                        if 'momentum' in x:
+                            x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
+
+                # Multi-Scale
+                if opt.multi_scale:
+                    if ni / accumulate % 1 == 0:  # adjust img_size (67% - 150%) every 1 batch
+                        img_size = random.randrange(grid_min, grid_max + 1) * gs
+                    sf = img_size / max(imgs.shape[2:])  # scale factor
+                    if sf != 1:
+                        ns = [math.ceil(x * sf / gs) * gs for x in
+                              imgs.shape[2:]]  # new shape (stretched to 32-multiple)
+                        imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
+
+                # Forward
+                pred = model(imgs)
+
+                # Loss
+                loss, loss_items = compute_loss(pred, targets, model)
+                if not torch.isfinite(loss):
+                    print('WARNING: non-finite loss, ending training ', loss_items)
+                    return results
+
+                # Backward
+                loss *= batch_size / 64  # scale loss
+                if mixed_precision:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
+
+                if opt.combine_progressive:
+                    with torch.no_grad():
+                        for name, W in (model.module.named_parameters() if type(
+                                model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                            if name in masks:
+                                W.grad *= masks[name]
+                if opt.masked_retrain:
+                    with torch.no_grad():
+                        for name, W in (model.module.named_parameters() if type(
+                                model) is torch.nn.parallel.DistributedDataParallel else model.named_parameters()):
+                            if name in masks:
+                                W.grad *= masks[name]
+
+                # Optimize
+                if ni % accumulate == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+                    ema.update(model)
+
+                # Print
+                mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
+                mem = '%.3gG' % (torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
+                s = ('%10s' * 2 + '%10.3g' * 6) % (
+                '%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
+                pbar.set_description(s)
+
+                # Plot
+                if ni < 1:
+                    f = 'train_batch%g.jpg' % i  # filename
+                    res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+                    if tb_writer:
+                        tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
+                        # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+
+                # end batch ------------------------------------------------------------------------------------------------
+
+            # Update scheduler
+            scheduler.step()
+
+            # Process epoch results
+            ema.update_attr(model)
+            final_epoch = epoch + 1 == epochs
+            if not opt.notest or final_epoch:  # Calculate mAP
+                is_coco = any(
+                    [x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
+                results, maps = test.test(cfg,
+                                          data,
+                                          batch_size=batch_size,
+                                          imgsz=imgsz_test,
+                                          model=ema.ema,
+                                          save_json=final_epoch and is_coco,
+                                          single_cls=opt.single_cls,
+                                          dataloader=testloader,
+                                          multi_label=ni > n_burn)
+
+            # Write
+            with open(results_file, 'a') as f:
+                f.write(s + '%10.3g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
+            if len(opt.name) and opt.bucket:
+                os.system('gsutil cp results.txt gs://%s/results/results%s.txt' % (opt.bucket, opt.name))
+
+            # Tensorboard
+            if tb_writer:
+                tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
+                        'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/F1',
+                        'val/giou_loss', 'val/obj_loss', 'val/cls_loss']
+                for x, tag in zip(list(mloss[:-1]) + list(results), tags):
+                    tb_writer.add_scalar(tag, x, epoch)
+
+            # Update best mAP
+            fi = fitness(np.array(results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
+            if fi > best_fitness:  #results[2]
+                best_fitness = fi  #results[2]
+                print("\n>_ Got better accuracy, saving model with accuracy {:.3f}% now...\n".format(results[2]))
+                torch.save(ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
+                           "./model_retrained/yolov3_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2], opt.rho_num, opt.config_file, opt.sparsity_type))
+
+            # Save model
+            save = (not opt.nosave) or (final_epoch and not opt.evolve)
+            if save:
+                with open(results_file, 'r') as f:  # create checkpoint
+                    chkpt = {'epoch': epoch,
+                             'best_fitness': best_fitness,
+                             'training_results': f.read(),
+                             'model': ema.ema.module.state_dict() if hasattr(model,
+                                                                             'module') else ema.ema.state_dict(),
+                             'optimizer': None if final_epoch else optimizer.state_dict()}
+
+                # Save last, best and delete
+                torch.save(chkpt, last)
+                if (best_fitness == fi) and not final_epoch:
+                    torch.save(chkpt, best)
+                del chkpt
+
+            # end epoch ----------------------------------------------------------------------------------------------------
+        # end training
+
+        test_sparsity(model, column=True, channel=False, filter=False)
+        print("Best Acc: {:.4f}".format(results[2]))
+        n = opt.name
+        if len(n):
+            n = '_' + n if not n.isnumeric() else n
+            fresults, flast, fbest = 'results%s.txt' % n, wdir + 'last%s.pt' % n, wdir + 'best%s.pt' % n
+            for f1, f2 in zip([wdir + 'last.pt', wdir + 'best.pt', 'results.txt'], [flast, fbest, fresults]):
+                if os.path.exists(f1):
+                    os.rename(f1, f2)  # rename
+                    ispt = f2.endswith('.pt')  # is *.pt
+                    strip_optimizer(f2) if ispt else None  # strip optimizer
+                    os.system('gsutil cp %s gs://%s/weights' % (
+                    f2, opt.bucket)) if opt.bucket and ispt else None  # upload
+
+        if not opt.evolve:
+            plot_results()  # save as results.png
+        print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
+        dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
+        torch.cuda.empty_cache()
+        # return results
+
+
 
 
 if __name__ == '__main__':
@@ -394,7 +705,55 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
+    parser.add_argument('--admm-file', type=str, default='admm', help='admm configuration file')
+    parser.add_argument('--trick-file', type=str, default='tricks', help='admm configuration file')
+
+
+
     opt = parser.parse_args()
+    if (opt.admm_file):
+        with open(os.path.join('cfg', opt.admm_file + ".yaml"), "r") as stream:
+            try:
+                raw_dict = yaml.load(stream, Loader=yaml.FullLoader)
+                opt.admm = raw_dict['admm']
+                opt.masked_retrain = raw_dict['masked-retrain']
+                opt.admm_epochs = raw_dict['admm-epochs']
+                opt.rho = raw_dict['rho']
+                opt.rho_num = raw_dict['rho-num']
+                opt.sparsity_type = raw_dict['sparsity-type']
+                opt.config_file = raw_dict['config-file']
+                opt.combine_progressive = raw_dict['combine-progressive']
+                opt.verbose = raw_dict['verbose']
+                opt.logger = raw_dict['logger']
+                opt.log_interval = raw_dict['log-interval']
+                opt.no_tricks = raw_dict['no-tricks']
+                opt.lr = hyp['lr0']
+            except yaml.YAMLError as exc:
+                exit(1)
+
+    if (opt.trick_file):
+        with open(os.path.join('cfg', opt.trick_file + ".yaml"), "r") as stream:
+            try:
+                raw_dict = yaml.load(stream, Loader=yaml.FullLoader)
+                opt.mixup = raw_dict['mixup']
+                opt.alpha = raw_dict['alpha']
+                opt.smooth = raw_dict['smooth']
+                opt.smooth_eps = raw_dict['smooth-eps']
+            except yaml.YAMLError as exc:
+                exit(1)
+
+    # if opt.logger:
+    #     logging.basicConfig(level=logging.INFO, format='%(message)s')
+    #     logger = logging.getLogger()
+    #     try:
+    #         os.makedirs("logger", exist_ok=True)
+    #     except TypeError:
+    #         raise Exception("Direction not create!")
+    #     logger.addHandler(logging.FileHandler(strftime('logger/CIFAR_%m-%d-%Y-%H:%M.log'), 'a'))
+    #     global print
+    #     print = logger.info
+
+
     opt.weights = last if opt.resume else opt.weights
     check_git_status()
     opt.cfg = list(glob.iglob('./**/' + opt.cfg, recursive=True))[0]  # find file
@@ -465,3 +824,21 @@ if __name__ == '__main__':
 
             # Plot results
             # plot_evolution_results(hyp)
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
