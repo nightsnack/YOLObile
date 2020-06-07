@@ -706,7 +706,7 @@ if __name__ == '__main__':
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--admm-file', type=str, default='admm', help='admm configuration file')
-    parser.add_argument('--trick-file', type=str, default='tricks', help='admm configuration file')
+    parser.add_argument('--trick-file', type=str, default='tricks', help='trick configuration file')
 
 
 

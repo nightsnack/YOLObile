@@ -1,20 +1,20 @@
-<table style="width:100%">
-  <tr>
-    <td>
-      <img src="https://user-images.githubusercontent.com/26833433/61591130-f7beea00-abc2-11e9-9dc0-d6abcf41d713.jpg">
-    </td>
-    <td align="center">
-    <a href="https://www.ultralytics.com" target="_blank">
-    <img src="https://storage.googleapis.com/ultralytics/logo/logoname1000.png" width="160"></a>
-      <img src="https://user-images.githubusercontent.com/26833433/61591093-2b4d4480-abc2-11e9-8b46-d88eb1dabba1.jpg">
-          <a href="https://itunes.apple.com/app/id1452689527" target="_blank">
-    <img src="https://user-images.githubusercontent.com/26833433/50044365-9b22ac00-0082-11e9-862f-e77aee7aa7b0.png" width="180"></a>
-    </td>
-    <td>
-      <img src="https://user-images.githubusercontent.com/26833433/61591100-55066b80-abc2-11e9-9647-52c0e045b288.jpg">
-    </td>
-  </tr>
-</table>
+
+# Training
+
+**ADMM: Training:** `python3 train.py --img-size 320 --batch-size 64 --device 0,1 --epoch 25 --multi-scale` admm does not support resume.
+
+**Masked Retrained:** `python3 train.py --img-size 320 --batch-size 64 --device 0,1 --epoch 300 --multi-scale`.
+
+**Masked Retrained Resume:** `python3 train.py --img-size 320 --batch-size 64 --device 0,1 --epoch 300 --multi-scale --resume` to resume training from `weights/last.pt`.
+
+#Extra config:
+
+**ADMM:** `--admm-file cfg/youradmmfile.yaml`
+
+**ADMM Load weights:** `--weights weights/yourweights.pt`
+
+**Model Backbone:** `--cfg cfg/yolov3-spp.cfg`
+
 
 # Introduction
 
@@ -39,14 +39,7 @@ Python 3.7 or later with all `pip install -U -r requirements.txt` packages inclu
 * [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart) 
 * [A TensorRT Implementation of YOLOv3 and YOLOv4](https://github.com/wang-xinyu/tensorrtx/tree/master/yolov3-spp) 
 
-# Training
-
-**Start Training:** `python3 train.py` to begin training after downloading COCO data with `data/get_coco2017.sh`. Each epoch trains on 117,263 images from the train and validate COCO sets, and tests on 5000 images from the COCO validate set.
-
-**Resume Training:** `python3 train.py --resume` to resume training from `weights/last.pt`.
-
-**Plot Training:** `from utils import utils; utils.plot_results()`
-
+# \>_<
 <img src="https://user-images.githubusercontent.com/26833433/78175826-599d4800-7410-11ea-87d4-f629071838f6.png" width="900">
 
 ## Image Augmentation
