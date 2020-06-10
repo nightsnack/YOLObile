@@ -9,9 +9,9 @@ rho:
 rho-num:
   4
 sparsity-type:
-  column
+  block-reorder
 config-file:
-  config_yolov3spp_v00
+  config_resnext50spp_v2
 combine-progressive:
   False
 verbose:

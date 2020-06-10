@@ -332,6 +332,61 @@ def weight_pruning(args, weight, prune_ratio, cross_x=4, cross_f=1):
             np.float32)  # has to convert bool to float32 for numpy-tensor conversion
         weight[under_threshold] = 0
         return torch.from_numpy(above_threshold).cuda(), torch.from_numpy(weight).cuda()
+
+
+    elif (args.sparsity_type == "block-reorder"):  # xuan shen
+        shape = weight.shape
+        weight2d = weight.reshape(shape[0], -1)
+        shape2d = weight2d.shape
+        # print(shape, shape2d)
+
+        length_f = 8  # this is the block size, it could be 16 or 8
+        num_channel_in_every_block = 4
+        kernel_s1d = shape[2]*shape[3]
+        length_x = kernel_s1d * num_channel_in_every_block  # kernel size = 3
+
+        if shape2d[0] % length_f != 0 or shape2d[1] % length_x != 0:
+            print("the layer size is not divisible")
+            # return torch.from_numpy(np.array([])).cuda(), torch.from_numpy(weight).cuda()
+            raise SyntaxError("block_size error")
+
+        cross_f = int(shape2d[0] / length_f)
+        cross_x = int(shape2d[1] / length_x)
+
+        # this function will not use the reorder method
+        l2_norm_record = np.zeros((cross_f, cross_x * kernel_s1d))
+        for i in range(cross_f):
+            for j in range(cross_x):
+                block = weight2d[i * length_f: (i + 1) * length_f, j * length_x: (j + 1) * length_x]
+                block_l2_norm = LA.norm(block, 2, axis=0)
+                for k in range(kernel_s1d):
+                    for c in range(num_channel_in_every_block):
+                        l2_norm_record[i, j * kernel_s1d + k] += block_l2_norm[k + c * kernel_s1d]  # there are 4 channels in every block
+
+        percentile = np.percentile(l2_norm_record, percent)
+        # under_threshold = l2_norm_record <= percentile
+        above_threshold = l2_norm_record > percentile
+
+        expand_above_threshold = np.zeros(shape2d, dtype=np.float32)
+        temp_mat_inexpand_0 = np.zeros(length_f)
+        temp_mat_inexpand_1 = np.ones(length_f)
+
+        for i in range(cross_f):
+            for j in range(cross_x):
+                # block = weight2d[i*length_f : (i+1)*length_f, j*length_x : (j+1)*length_x]
+                for k in range(kernel_s1d):
+                    if above_threshold[i, kernel_s1d * j + k]:
+                        for c in range(num_channel_in_every_block):
+                            expand_above_threshold[i * length_f: (i + 1) * length_f,
+                            j * length_x + k + kernel_s1d * c] = temp_mat_inexpand_1
+                    else:
+                        for c in range(num_channel_in_every_block):
+                            weight2d[i * length_f: (i + 1) * length_f, j * length_x + k + kernel_s1d * c] = temp_mat_inexpand_0
+
+        weight = weight.reshape(shape)
+        expand_above_threshold = expand_above_threshold.reshape(shape)
+        return torch.from_numpy(expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
+        ####################################
     elif (args.sparsity_type == "pattern"):
         print("pattern pruning...", weight.shape)
         shape = weight.shape

@@ -41,7 +41,7 @@ def detect(save_img=False):
 
     # Export mode
     if ONNX_EXPORT:
-        model.fuse()
+        # model.fuse()
         img = torch.zeros((1, 3) + imgsz)  # (1, 3, 320, 192)
         f = opt.weights.replace(opt.weights.split('.')[-1], 'onnx')  # *.onnx filename
         torch.onnx.export(model, img, f, verbose=False, opset_version=11,

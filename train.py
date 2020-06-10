@@ -346,9 +346,9 @@ def train(hyp):
                     if ni < 1:
                         f = 'train_batch%g.jpg' % i  # filename
                         res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
-                        if tb_writer:
-                            tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
-                            # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+                        # if tb_writer:
+                        #     tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
+                        #     # tb_writer.add_graph(model, imgs)  # add model to tensorboard
 
                     # end batch ------------------------------------------------------------------------------------------------
 
@@ -371,7 +371,7 @@ def train(hyp):
                                               save_json=final_epoch and is_coco,
                                               single_cls=opt.single_cls,
                                               dataloader=testloader,
-                                              multi_label=ni > n_burn)
+                                              multi_label=ni > n_burn, opt=opt)
 
                 # Write
                 with open(results_file, 'a') as f:
@@ -420,13 +420,13 @@ def train(hyp):
         ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=initial_rho)
         if not opt.resume:
             # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-            print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
-            chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
-
+            # print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
+            # chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
+            chkpt = torch.load(weights, map_location=device)
             # load model
             try:
-                # chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-                model.load_state_dict(chkpt, strict=False)
+                chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+                model.load_state_dict(chkpt['model'], strict=False)
             except KeyError as e:
                 # s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 #     "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
@@ -520,7 +520,8 @@ def train(hyp):
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
             for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-
+                if i > 30:
+                    break
                 ni = i + nb * epoch  # number integrated batches (since train start)
                 imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
                 targets = targets.to(device)
@@ -617,7 +618,7 @@ def train(hyp):
                                           save_json=final_epoch and is_coco,
                                           single_cls=opt.single_cls,
                                           dataloader=testloader,
-                                          multi_label=ni > n_burn)
+                                          multi_label=ni > n_burn,opt=opt)
 
             # Write
             with open(results_file, 'a') as f:

@@ -1,29 +1,27 @@
 prune_ratios:
 #  module_list.0.Conv2d.weight:
-#    0.1
-  module_list.1.Conv2d.weight:
-    0.3
+#    0.0
   module_list.2.Conv2d.weight:
-    0.1
-  module_list.3.Conv2d.weight:
-    0.4
+    0.3
+  module_list.4.Conv2d.weight:
+    0.3
   module_list.5.Conv2d.weight:
-    0.4
+    0.3
   module_list.6.Conv2d.weight:
-    0.4
+    0.3
   module_list.7.Conv2d.weight:
     0.4
   module_list.9.Conv2d.weight:
     0.4
   module_list.10.Conv2d.weight:
     0.4
-  module_list.12.Conv2d.weight:
+  module_list.11.Conv2d.weight:
     0.5
   module_list.13.Conv2d.weight:
     0.5
   module_list.14.Conv2d.weight:
     0.5
-  module_list.16.Conv2d.weight:
+  module_list.15.Conv2d.weight:
     0.5
   module_list.17.Conv2d.weight:
     0.5
@@ -31,9 +29,11 @@ prune_ratios:
     0.5
   module_list.20.Conv2d.weight:
     0.5
-  module_list.22.Conv2d.weight:
+  module_list.21.Conv2d.weight:
     0.5
   module_list.23.Conv2d.weight:
+    0.5
+  module_list.24.Conv2d.weight:
     0.5
   module_list.25.Conv2d.weight:
     0.5
@@ -43,23 +43,25 @@ prune_ratios:
     0.5
   module_list.29.Conv2d.weight:
     0.5
-  module_list.31.Conv2d.weight:
+  module_list.30.Conv2d.weight:
     0.5
   module_list.32.Conv2d.weight:
     0.5
+  module_list.33.Conv2d.weight:
+    0.5
   module_list.34.Conv2d.weight:
     0.5
-  module_list.35.Conv2d.weight:
+  module_list.36.Conv2d.weight:
     0.5
-  module_list.37.Conv2d.weight:
-    0.6
   module_list.38.Conv2d.weight:
     0.6
   module_list.39.Conv2d.weight:
     0.6
-  module_list.41.Conv2d.weight:
+  module_list.40.Conv2d.weight:
     0.6
   module_list.42.Conv2d.weight:
+    0.6
+  module_list.43.Conv2d.weight:
     0.6
   module_list.44.Conv2d.weight:
     0.6
@@ -69,85 +71,97 @@ prune_ratios:
     0.6
   module_list.48.Conv2d.weight:
     0.6
-  module_list.50.Conv2d.weight:
+  module_list.49.Conv2d.weight:
     0.6
   module_list.51.Conv2d.weight:
     0.6
+  module_list.52.Conv2d.weight:
+    0.6
   module_list.53.Conv2d.weight:
     0.6
-  module_list.54.Conv2d.weight:
+  module_list.55.Conv2d.weight:
     0.6
   module_list.56.Conv2d.weight:
-    0.7
+    0.6
   module_list.57.Conv2d.weight:
-    0.7
+    0.6
   module_list.59.Conv2d.weight:
-    0.7
+    0.6
   module_list.60.Conv2d.weight:
-    0.7
-  module_list.62.Conv2d.weight:
-    0.7
+    0.6
+  module_list.61.Conv2d.weight:
+    0.6
   module_list.63.Conv2d.weight:
-    0.7
-  module_list.64.Conv2d.weight:
-    0.7
+    0.6
+  module_list.65.Conv2d.weight:
+    0.6
   module_list.66.Conv2d.weight:
-    0.7
+    0.6
   module_list.67.Conv2d.weight:
-    0.7
+    0.6
   module_list.69.Conv2d.weight:
-    0.7
+    0.6
   module_list.70.Conv2d.weight:
-    0.7
+    0.6
+  module_list.71.Conv2d.weight:
+    0.6
   module_list.72.Conv2d.weight:
-    0.7
-  module_list.73.Conv2d.weight:
+    0.6
+  module_list.74.Conv2d.weight:
     0.7
   module_list.75.Conv2d.weight:
-    0.4
+    0.7
   module_list.76.Conv2d.weight:
+    0.7
+  module_list.78.Conv2d.weight:
+    0.7
+  module_list.80.Conv2d.weight:
+    0.7
+  module_list.81.Conv2d.weight:
+    0.7
+  module_list.82.Conv2d.weight:
+    0.7
+  module_list.83.Conv2d.weight:
+    0.7
+  module_list.90.Conv2d.weight:
     0.4
-  module_list.77.Conv2d.weight:
-    0.4
-  module_list.84.Conv2d.weight:
-    0.3
-  module_list.85.Conv2d.weight:
-    0.3
-  module_list.86.Conv2d.weight:
-    0.3
-  module_list.87.Conv2d.weight:
-    0.3
-#  module_list.88.Conv2d.weight:
-#    0.0
   module_list.91.Conv2d.weight:
-    0.2
-  module_list.94.Conv2d.weight:
     0.4
-  module_list.95.Conv2d.weight:
+  module_list.92.Conv2d.weight:
     0.4
-  module_list.96.Conv2d.weight:
+  module_list.93.Conv2d.weight:
     0.4
-  module_list.97.Conv2d.weight:
-    0.4
-  module_list.98.Conv2d.weight:
-    0.4
-  module_list.99.Conv2d.weight:
-    0.3
-#  module_list.100.Conv2d.weight:
+#  module_list.94.Conv2d.weight:
 #    0.0
+  module_list.97.Conv2d.weight:
+    0.1
+  module_list.100.Conv2d.weight:
+    0.5
+  module_list.101.Conv2d.weight:
+    0.5
+  module_list.102.Conv2d.weight:
+    0.5
   module_list.103.Conv2d.weight:
-    0.2
-  module_list.106.Conv2d.weight:
-    0.4
-  module_list.107.Conv2d.weight:
-    0.4
-  module_list.108.Conv2d.weight:
-    0.4
+    0.5
+  module_list.104.Conv2d.weight:
+    0.5
+  module_list.105.Conv2d.weight:
+    0.5
+#  module_list.106.Conv2d.weight:
+#    0.0
   module_list.109.Conv2d.weight:
-    0.4
-  module_list.110.Conv2d.weight:
-    0.4
-  module_list.111.Conv2d.weight:
-    0.4
-#  module_list.112.Conv2d.weight:
+    0.1
+  module_list.112.Conv2d.weight:
+    0.5
+  module_list.113.Conv2d.weight:
+    0.5
+  module_list.114.Conv2d.weight:
+    0.5
+  module_list.115.Conv2d.weight:
+    0.5
+  module_list.116.Conv2d.weight:
+    0.5
+  module_list.117.Conv2d.weight:
+    0.5
+#  module_list.118.Conv2d.weight:
 #    0.0

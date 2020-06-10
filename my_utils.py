@@ -5,7 +5,7 @@ import yaml
 import xlsxwriter
 from numpy import linalg as LA
 from models import Darknet
-from thop import profile
+
 
 from collections import OrderedDict
 
@@ -195,7 +195,6 @@ def test_sparsity(model, column=True, channel=True, filter=True, kernel=True):
             if (len(weight.size()) == 4):# and "shortcut" not in name):  # only consider conv layers
                 weight2d = weight.reshape(weight.shape[0], -1)
                 column_num = weight2d.shape[1]
-
                 empty_column = np.sum(np.sum(np.absolute(weight2d.cpu().detach().numpy()), axis=0) == 0)
                 print("(empty/total) column of {}({}) is: ({}/{}). column sparsity is: {:.4f}".format(
                     name, layer_cont, empty_column, weight.size()[1] * weight.size()[2] * weight.size()[3],
@@ -312,7 +311,7 @@ def test_sparsity(model, column=True, channel=True, filter=True, kernel=True):
 
 
 if __name__ == '__main__':
-    model = Darknet(cfg = 'cfg/yolov3-spp.cfg',img_size=(320,320))
+    model = Darknet(cfg = 'cfg/csresnext50c-yolo-spp.cfg',img_size=(320,320))
     # state_dict = torch.load('weights/yolov3_retrained_acc_0.492_4rhos_config_yolov3_v00_column.pt') #model_prunned/yolov3_0.1_config_yolov3_v00_column.pt
     # new_state_dict = OrderedDict()
     # for k, v in state_dict.items():
@@ -322,18 +321,17 @@ if __name__ == '__main__':
     # model.load_state_dict(new_state_dict)
     # model.load_state_dict(state_dict) ##state_dict["model"]
     input = torch.randn(1, 3, 320, 320)
-    # flops, params = profile(model, inputs=(input, ))
-    # print(flops)
-    # print()
-    # print(params)
 
-    yaml_sparsity_calculator(model,filename1='config_yolov3spp_v00')
+
+    yaml_sparsity_calculator(model,filename1='config_resnext50spp_v2')
     # manually_hard_prune(model,yaml_name='config_yolov3_v1',sparsity_type='column' )
-    # comp_ratio = test_sparsity(model, column=True, channel=False, filter=False, kernel=False)
-    # print(comp_ratio)
+    comp_ratio = test_sparsity(model, column=True, channel=False, filter=False, kernel=False)
+    print(comp_ratio)
     # 320
-    # flops:19659927552.0/yolov3cfg:19554916352
-    # params:62998752.0
+    # flops:spp: 19659927552.0/yolov3cfg:19554916352
+    # csresnext50c-spp.cfg               11591114700.0
+    # params:                          62998752.0
+    # csresnext50c-spp.cfg             41622845.0
     # 416
     # flops:33047797760.0
     # params:61949152.0
