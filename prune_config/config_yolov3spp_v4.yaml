@@ -1,6 +1,6 @@
 prune_ratios:
-   module_list.0.Conv2d.weight:
-     0.1
+#   module_list.0.Conv2d.weight:
+#     0.1
    module_list.1.Conv2d.weight:
      0.5
    module_list.2.Conv2d.weight:
@@ -117,8 +117,8 @@ prune_ratios:
      0.7
    module_list.87.Conv2d.weight:
      0.7
-   module_list.88.Conv2d.weight:
-     0.0
+#   module_list.88.Conv2d.weight:
+#     0.0
    module_list.91.Conv2d.weight:
      0.7
    module_list.94.Conv2d.weight:
@@ -133,8 +133,8 @@ prune_ratios:
      0.7
    module_list.99.Conv2d.weight:
      0.8
-   module_list.100.Conv2d.weight:
-     0.0
+#   module_list.100.Conv2d.weight:
+#     0.0
    module_list.103.Conv2d.weight:
      0.7
    module_list.106.Conv2d.weight:
@@ -149,5 +149,5 @@ prune_ratios:
      0.7
    module_list.111.Conv2d.weight:
      0.5
-   module_list.112.Conv2d.weight:
-     0.0
+#   module_list.112.Conv2d.weight:
+#     0.0

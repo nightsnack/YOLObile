@@ -153,7 +153,7 @@ class YOLOLayer(nn.Module):
         # build xy offsets
         if not self.training:
             yv, xv = torch.meshgrid([torch.arange(self.ny, device=device), torch.arange(self.nx, device=device)])
-            self.grid = torch.stack((xv, yv), 2).view((1, 1, self.ny, self.nx, 2)).float()
+            self.grid = torch.stack((xv, yv), 2).view((1, 1, self.ny, self.nx, 2)).float().to(device)
 
         if self.anchor_vec.device != device:
             self.anchor_vec = self.anchor_vec.to(device)
@@ -209,8 +209,8 @@ class YOLOLayer(nn.Module):
 
         else:  # inference
             io = p.clone()  # inference output
-            io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid  # xy
-            io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
+            io[..., :2] = torch.sigmoid(io[..., :2]).to(p.device) + self.grid.to(p.device)  # xy
+            io[..., 2:4] = torch.exp(io[..., 2:4]).to(p.device) * self.anchor_wh.to(p.device)  # wh yolo method
             io[..., :4] *= self.stride
             torch.sigmoid_(io[..., 4:])
             return io.view(bs, -1, self.no), p  # view [1, 3, 13, 13, 85] as [1, 507, 85]

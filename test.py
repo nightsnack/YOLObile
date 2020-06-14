@@ -14,7 +14,7 @@ def test(cfg,
          batch_size=16,
          imgsz=416,
          conf_thres=0.001,
-         iou_thres=0.6,  # for nms
+         iou_thres=0.5,  # for nms
          save_json=False,
          single_cls=False,
          augment=False,
@@ -36,12 +36,12 @@ def test(cfg,
         # Load weights
         attempt_download(weights)
         if weights.endswith('.pt'):  # pytorch format
-            model.load_state_dict(torch.load(weights, map_location=device)['model'])
+            model.load_state_dict(torch.load(weights, map_location=device)['model'], strict=False) #['model']
         else:  # darknet format
             load_darknet_weights(model, weights)
 
         # Fuse
-        model.fuse()
+        # model.fuse()
         model.to(device)
 
         if device.type != 'cpu' and torch.cuda.device_count() > 1:
@@ -199,15 +199,15 @@ def test(cfg,
     if save_json and map and len(jdict):
         print('\nCOCO mAP with pycocotools...')
         imgIds = [int(Path(x).stem.split('_')[-1]) for x in dataloader.dataset.img_files]
-        with open('results.json', 'w') as file:
-            json.dump(jdict, file)
+        # with open('results.json', 'w') as file:
+        #     json.dump(jdict, file)
 
         try:
             from pycocotools.coco import COCO
             from pycocotools.cocoeval import COCOeval
 
             # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-            cocoGt = COCO(glob.glob('data/coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
+            cocoGt = COCO(glob.glob('coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
             cocoDt = cocoGt.loadRes('results.json')  # initialize COCO pred api
 
             cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
@@ -215,7 +215,6 @@ def test(cfg,
             cocoEval.evaluate()
             cocoEval.accumulate()
             cocoEval.summarize()
-
             # mf1, map = cocoEval.stats[:2]  # update to pycocotools results (mAP@0.5:0.95, mAP@0.5)
         except:
             print('WARNING: pycocotools must be installed with numpy==1.17 to run correctly. '
@@ -234,9 +233,9 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='data/coco2014.data', help='*.data path')
     parser.add_argument('--weights', type=str, default='weights/yolov3-spp-ultralytics.pt', help='weights path')
     parser.add_argument('--batch-size', type=int, default=16, help='size of each image batch')
-    parser.add_argument('--img-size', type=int, default=512, help='inference size (pixels)')
+    parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.6, help='IOU threshold for NMS')
+    parser.add_argument('--iou-thres', type=float, default=0.5, help='IOU threshold for NMS')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--task', default='test', help="'test', 'study', 'benchmark'")
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1) or cpu')
@@ -250,7 +249,7 @@ if __name__ == '__main__':
 
     # task = 'test', 'study', 'benchmark'
     if opt.task == 'test':  # (default) test normally
-        test(opt.cfg,
+        results,map = test(opt.cfg,
              opt.data,
              opt.weights,
              opt.batch_size,
@@ -260,6 +259,7 @@ if __name__ == '__main__':
              opt.save_json,
              opt.single_cls,
              opt.augment)
+        # print(results, map)
 
     elif opt.task == 'benchmark':  # mAPs at 256-640 at conf 0.5 and 0.7
         y = []

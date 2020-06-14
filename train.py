@@ -361,7 +361,7 @@ def train(hyp):
                 # Process epoch results
                 ema.update_attr(model)
                 final_epoch = epoch + 1 == epochs
-                if not opt.notest or final_epoch:  # Calculate mAP
+                if not opt.notest:  # Calculate mAP  #or final_epoch
                     is_coco = any([x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
                     results, maps = test.test(cfg,
                                               data,
@@ -371,7 +371,7 @@ def train(hyp):
                                               save_json=final_epoch and is_coco,
                                               single_cls=opt.single_cls,
                                               dataloader=testloader,
-                                              multi_label=ni > n_burn, opt=opt)
+                                              multi_label=ni > n_burn)
 
                 # Write
                 with open(results_file, 'a') as f:
@@ -520,8 +520,8 @@ def train(hyp):
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
             for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-                if i > 30:
-                    break
+                # if i > 10:
+                #     break
                 ni = i + nb * epoch  # number integrated batches (since train start)
                 imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
                 targets = targets.to(device)
@@ -618,7 +618,7 @@ def train(hyp):
                                           save_json=final_epoch and is_coco,
                                           single_cls=opt.single_cls,
                                           dataloader=testloader,
-                                          multi_label=ni > n_burn,opt=opt)
+                                          multi_label=ni > n_burn)
 
             # Write
             with open(results_file, 'a') as f:
@@ -679,9 +679,9 @@ def train(hyp):
         if not opt.evolve:
             plot_results()  # save as results.png
         print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
-        dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
+        # dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
         torch.cuda.empty_cache()
-        # return results
+        return results
 
 
 

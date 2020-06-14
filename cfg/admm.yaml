@@ -5,11 +5,11 @@ masked-retrain:
 admm-epochs:
   1
 rho:
-  0.0001
+  0.1
 rho-num:
-  4
+  1
 sparsity-type:
-  column
+  block-reorder
 config-file:
   config_yolov3spp_v00
 combine-progressive:

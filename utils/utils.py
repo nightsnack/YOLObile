@@ -418,6 +418,7 @@ def build_targets(p, targets, model):
     multi_gpu = type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
     for i, j in enumerate(model.yolo_layers):
         anchors = model.module.module_list[j].anchor_vec if multi_gpu else model.module_list[j].anchor_vec
+        anchors = anchors.to(targets.device)
         gain[2:] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain
         na = anchors.shape[0]  # number of anchors
         at = torch.arange(na).view(na, 1).repeat(1, nt)  # anchor tensor, same as .repeat_interleave(nt)

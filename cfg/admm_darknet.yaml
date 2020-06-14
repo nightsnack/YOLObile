@@ -11,7 +11,7 @@ rho-num:
 sparsity-type:
   block-reorder
 config-file:
-  config_resnext50spp_v4
+  config_csdarknet53pan_v4
 combine-progressive:
   False
 verbose:
