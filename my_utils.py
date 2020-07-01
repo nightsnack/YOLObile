@@ -2,47 +2,48 @@ import numpy as np
 import torch
 import math
 import yaml
-import xlsxwriter
+# import xlsxwriter
 from numpy import linalg as LA
 from models import Darknet
-
+# from thop import profile
 
 from collections import OrderedDict
 
-def write_to_excel(model, fc=False, bias=False, all_layer=False):
-
-    xlse_file_name = "weights.xlsx"
-    workbook = xlsxwriter.Workbook(xlse_file_name)
-    print("--------------------------------------------------")
-    print("writing weights to excel file {}".format(xlse_file_name))
-
-    for name, weight in model.named_parameters():  # calculate total layer
-        # not conv layer
-        if not (len(weight.size()) == 4 and "shortcut" not in name and "downsample" not in name):
-            # not write all_layer (bias and fc)
-            if not all_layer:
-                # is batch_norm or bias
-                if len(weight.size()) == 1:
-                    if "bias" not in name:  # is batch_norm
-                        continue
-                    elif not bias:  # not write bias
-                        continue
-                # not write fully connected layer
-                elif not fc:
-                    continue
-
-        weight2d = weight.reshape(weight.shape[0], -1)  # reshape to 2d format
-
-        worksheet = workbook.add_worksheet(name)
-        print("writing {} ...".format(name))
-        start_col = 0  # writing whole col from row 0
-        for row in range(weight.shape[0]):
-            worksheet.write_row(row, start_col, weight2d[row])
-
-    workbook.close()
-
-    print("writing finished!")
-    print("each row contains all the weights on a filter, there are filter number of rows")
+# def write_to_excel(model, fc=False, bias=False, all_layer=False):
+#
+#     xlse_file_name = "weights.xlsx"
+#     workbook = xlsxwriter.Workbook(xlse_file_name)
+#     print("--------------------------------------------------")
+#     print("writing weights to excel file {}".format(xlse_file_name))
+#
+#     for name, weight in model.named_parameters():  # calculate total layer
+#         # not conv layer
+#         if not (len(weight.size()) == 4 and "shortcut" not in name and "downsample" not in name):
+#             # not write all_layer (bias and fc)
+#             if not all_layer:
+#                 # is batch_norm or bias
+#                 if len(weight.size()) == 1:
+#                     if "bias" not in name:  # is batch_norm
+#                         continue
+#                     elif not bias:  # not write bias
+#                         continue
+#                 # not write fully connected layer
+#                 elif not fc:
+#                     continue
+#
+#         weight2d = weight.reshape(weight.shape[0], -1)  # reshape to 2d format
+#
+#         worksheet = workbook.add_worksheet(name)
+#         print("writing {} ...".format(name))
+#         start_col = 0  # writing whole col from row 0
+#         for row in range(weight.shape[0]):
+#             worksheet.write_row(row, start_col, weight2d[row])
+#
+#     workbook.close()
+#
+#     print("writing finished!")
+#     print("each row contains all the weights on a filter, there are filter number of rows")
+from utils.profile import profile
 
 
 def yaml_sparsity_calculator(model, filename1=None, filename2=None):
@@ -312,21 +313,24 @@ def test_sparsity(model, column=True, channel=True, filter=True, kernel=True):
 
 if __name__ == '__main__':
     model = Darknet(cfg = 'cfg/csdarknet53s-panet-spp.cfg',img_size=(320,320))
-    # state_dict = torch.load('model_retrained/yolov3_retrained_acc_0.469_1rhos_config_resnext50spp_v2_block-reorder.pt') #model_prunned/yolov3_0.1_config_yolov3_v00_column.pt
+    state_dict = torch.load('weights/best51.pt') #model_prunned/yolov3_0.1_config_yolov3_v00_column.pt
     # new_state_dict = OrderedDict()
     # for k, v in state_dict.items():
     #     name = k[7:]  # remove `module.`
     #     new_state_dict[name] = v
     # load params
     # model.load_state_dict(new_state_dict)
-    # model.load_state_dict(state_dict) ##state_dict["model"]
-    # input = torch.randn(1, 3, 512, 512)
+    model.load_state_dict(state_dict["model"]) ##state_dict["model"]
+    input = torch.randn(1, 3, 512, 512)
+    flops, params = profile(model, inputs=(input, ),verbose=True)
+    print(flops)
+    print()
+    print(params)
 
-
-    yaml_sparsity_calculator(model,filename1='config_csdarknet53pan_v4')
+    yaml_sparsity_calculator(model,filename1='config_csdarknet53pan_v8')
     # manually_hard_prune(model,yaml_name='config_yolov3spp_v4',sparsity_type='column' )
-    comp_ratio = test_sparsity(model, column=True, channel=False, filter=False, kernel=False)
-    # print(comp_ratio)
+    comp_ratio = test_sparsity(model, column=False, channel=False, filter=False, kernel=False)
+    print(comp_ratio)
     # 320
     # flops:spp: 19659927552.0/yolov3cfg:19554916352
     # csresnext50c-spp.cfg               11591114700.0

@@ -22,7 +22,7 @@ def detect(save_img=False):
     # Load weights
     attempt_download(weights)
     if weights.endswith('.pt'):  # pytorch format
-        model.load_state_dict(torch.load(weights, map_location=device)['model'])
+        model.load_state_dict(torch.load(weights, map_location=device)['model'],strict=False)
     else:  # darknet format
         load_darknet_weights(model, weights)
 
@@ -44,7 +44,7 @@ def detect(save_img=False):
         # model.fuse()
         img = torch.zeros((1, 3) + imgsz)  # (1, 3, 320, 192)
         f = opt.weights.replace(opt.weights.split('.')[-1], 'onnx')  # *.onnx filename
-        torch.onnx.export(model, img, f, verbose=False, opset_version=11,
+        torch.onnx.export(model, img, f, verbose=False, opset_version=9,
                           input_names=['images'], output_names=['classes', 'boxes'])
 
         # Validate exported model

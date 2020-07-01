@@ -1,13 +1,13 @@
 admm:
-  False
-masked-retrain:
   True
+masked-retrain:
+  False
 admm-epochs:
-  1
+  3
 rho:
-  0.1
+  0.0001
 rho-num:
-  1
+  4
 sparsity-type:
   block-reorder
 config-file:

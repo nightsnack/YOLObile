@@ -14,6 +14,7 @@ def create_modules(module_defs, img_size, cfg):
     module_list = nn.ModuleList()
     routs = []  # list of layers which rout to deeper layers
     yolo_index = -1
+    upsample_index = 0
 
     for i, mdef in enumerate(module_defs):
         modules = nn.Sequential()
@@ -70,8 +71,11 @@ def create_modules(module_defs, img_size, cfg):
 
         elif mdef['type'] == 'upsample':
             if ONNX_EXPORT:  # explicitly state size, avoid scale_factor
-                g = (yolo_index + 1) * 2 / 32  # gain
+                # if yolo_index== -1:
+                #     yolo_index = 0
+                g = (upsample_index + 1) * 2 / 32  # gain
                 modules = nn.Upsample(size=tuple(int(x * g) for x in img_size))  # img_size = (320, 192)
+                upsample_index = upsample_index + 1
             else:
                 modules = nn.Upsample(scale_factor=mdef['stride'])
 
@@ -153,7 +157,7 @@ class YOLOLayer(nn.Module):
         # build xy offsets
         if not self.training:
             yv, xv = torch.meshgrid([torch.arange(self.ny, device=device), torch.arange(self.nx, device=device)])
-            self.grid = torch.stack((xv, yv), 2).view((1, 1, self.ny, self.nx, 2)).float().to(device)
+            self.grid = torch.stack((xv, yv), 2).view((1, 1, self.ny, self.nx, 2)).float()
 
         if self.anchor_vec.device != device:
             self.anchor_vec = self.anchor_vec.to(device)

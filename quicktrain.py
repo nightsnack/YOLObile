@@ -190,12 +190,11 @@ def train(hyp):
 
         # load model
         try:
-            # chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-            model.load_state_dict(chkpt, strict=False)
-        except Exception as e:
+            chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+            model.load_state_dict(chkpt['model'], strict=False)
+        except KeyError as e:
             s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
-            print(e)
             raise KeyError(s) from e
 
         del chkpt
@@ -421,13 +420,13 @@ def train(hyp):
         ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=initial_rho)
         if not opt.resume:
             # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-            print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
-            chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
-            # chkpt = torch.load(weights, map_location=device)
+            # print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
+            # chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
+            chkpt = torch.load(weights, map_location=device)
             # load model
             try:
-                # chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-                model.load_state_dict(chkpt, strict=False) #['model']
+                chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+                model.load_state_dict(chkpt['model'], strict=False) #['model']
 
             except KeyError as e:
                 # s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \

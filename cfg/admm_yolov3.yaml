@@ -1,7 +1,7 @@
 admm:
-  False
-masked-retrain:
   True
+masked-retrain:
+  False
 admm-epochs:
   3
 rho:
@@ -9,9 +9,9 @@ rho:
 rho-num:
   4
 sparsity-type:
-  block-reorder
+  column
 config-file:
-  config_resnext50spp_v4
+  config_yolov3_v8
 combine-progressive:
   False
 verbose:

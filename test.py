@@ -2,7 +2,7 @@ import argparse
 import json
 
 from torch.utils.data import DataLoader
-
+import glob
 from models import *
 from utils.datasets import *
 from utils.utils import *
@@ -14,7 +14,7 @@ def test(cfg,
          batch_size=16,
          imgsz=416,
          conf_thres=0.001,
-         iou_thres=0.5,  # for nms
+         iou_thres=0.7,  # for nms
          save_json=False,
          single_cls=False,
          augment=False,
@@ -199,15 +199,15 @@ def test(cfg,
     if save_json and map and len(jdict):
         print('\nCOCO mAP with pycocotools...')
         imgIds = [int(Path(x).stem.split('_')[-1]) for x in dataloader.dataset.img_files]
-        # with open('results.json', 'w') as file:
-        #     json.dump(jdict, file)
+        with open('results.json', 'w') as file:
+            json.dump(jdict, file)
 
         try:
             from pycocotools.coco import COCO
             from pycocotools.cocoeval import COCOeval
 
             # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-            cocoGt = COCO(glob.glob('coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
+            cocoGt = COCO(glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
             cocoDt = cocoGt.loadRes('results.json')  # initialize COCO pred api
 
             cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=16, help='size of each image batch')
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.5, help='IOU threshold for NMS')
+    parser.add_argument('--iou-thres', type=float, default=0.6, help='IOU threshold for NMS')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--task', default='test', help="'test', 'study', 'benchmark'")
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1) or cpu')
