@@ -2,8 +2,8 @@
 # pycocotools requires numpy 1.17 https://github.com/cocodataset/cocoapi/issues/356
 numpy == 1.17.5
 opencv-python >= 4.1
-torch == 1.4
-torchvision==0.5.0
+torch == 1.5.1
+torchvision==0.6.1
 matplotlib
 pycocotools
 tqdm
@@ -11,6 +11,7 @@ pillow
 tensorboard >= 1.14
 PyYAML
 xlsxwriter
+thop
 
 
 # Nvidia Apex (optional) for mixed precision training --------------------------
