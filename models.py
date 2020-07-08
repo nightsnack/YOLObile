@@ -110,6 +110,9 @@ def create_modules(module_defs, img_size, cfg):
             # Initialize preceding Conv2d() bias (https://arxiv.org/pdf/1708.02002.pdf section 3.3)
             try:
                 j = layers[yolo_index] if 'from' in mdef else -1
+                # If previous layer is a dropout layer, get the one before
+                if module_list[j].__class__.__name__ == 'Dropout':
+                    j -= 1
                 bias_ = module_list[j][0].bias  # shape(255,)
                 bias = bias_[:modules.no * modules.na].view(modules.na, -1)  # shape(3,85)
                 bias[:, 4] += -4.5  # obj
@@ -118,6 +121,9 @@ def create_modules(module_defs, img_size, cfg):
             except:
                 print('WARNING: smart bias initialization failure.')
 
+        elif mdef['type'] == 'dropout':
+            perc = float(mdef['probability'])
+            modules = nn.Dropout(p=perc)
         else:
             print('Warning: Unrecognized Layer Type: ' + mdef['type'])
 
@@ -442,7 +448,7 @@ def convert(cfg='cfg/yolov3-spp.cfg', weights='weights/yolov3-spp.weights'):
 
         target = weights.rsplit('.', 1)[0] + '.pt'
         torch.save(chkpt, target)
-        print("Success: converted '%s' to 's%'" % (weights, target))
+        print("Success: converted '%s' to '%s'" % (weights, target))
 
     else:
         print('Error: extension not supported.')
