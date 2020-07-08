@@ -35,20 +35,24 @@ Python 3.7 or later with all `pip install -U -r requirements.txt` packages inclu
 * [Train Custom Data](https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data) < highly recommended!!
 * [Train Single Class](https://github.com/ultralytics/yolov3/wiki/Example:-Train-Single-Class)
 * [Google Colab Notebook](https://colab.research.google.com/github/ultralytics/yolov3/blob/master/tutorial.ipynb) with quick training, inference and testing examples
+
 * [GCP Quickstart](https://github.com/ultralytics/yolov3/wiki/GCP-Quickstart)
-* [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart) 
+* [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart)  ![Docker Pulls](https://img.shields.io/docker/pulls/ultralytics/yolov3?logo=docker)
 * [A TensorRT Implementation of YOLOv3 and YOLOv4](https://github.com/wang-xinyu/tensorrtx/tree/master/yolov3-spp) 
 
 # \>_<
+
 <img src="https://user-images.githubusercontent.com/26833433/78175826-599d4800-7410-11ea-87d4-f629071838f6.png" width="900">
 
-## Image Augmentation
+
+### Image Augmentation
 
 `datasets.py` applies OpenCV-powered (https://opencv.org/) augmentation to the input image. We use a **mosaic dataloader** to increase image variability during training.
 
 <img src="https://user-images.githubusercontent.com/26833433/80769557-6e015d00-8b02-11ea-9c4b-69310eb2b962.jpg" width="900">
 
-## Speed
+
+### Speed
 
 https://cloud.google.com/deep-learning-vm/  
 **Machine type:** preemptible [n1-standard-8](https://cloud.google.com/compute/docs/machine-types) (8 vCPUs, 30 GB memory)   
@@ -66,7 +70,8 @@ T4     |1<br>2| 32 x 2<br>64 x 1 | 41<br>61 | 48 min<br>32 min | $0.09<br>$0.11
 V100   |1<br>2| 32 x 2<br>64 x 1 | 122<br>**178** | 16 min<br>**11 min** | **$0.21**<br>$0.28
 2080Ti |1<br>2| 32 x 2<br>64 x 1 | 81<br>140 | 24 min<br>14 min | -<br>-
 
-# Inference
+
+## Inference
 
 ```bash
 python3 detect.py --source ...
@@ -89,9 +94,10 @@ python3 detect.py --source ...
 <img src="https://user-images.githubusercontent.com/26833433/64067833-51d5b500-cc2f-11e9-8208-6fe197809131.jpg" width="500">
 
 
-# Pretrained Weights
+## Pretrained Checkpoints
 
 Download from: [https://drive.google.com/open?id=1LezFG5g3BCW6iYaV89B2i64cqEUZD7e0](https://drive.google.com/open?id=1LezFG5g3BCW6iYaV89B2i64cqEUZD7e0)
+
 
 ## Darknet Conversion
 
@@ -107,7 +113,8 @@ $ python3  -c "from models import *; convert('cfg/yolov3-spp.cfg', 'weights/yolo
 Success: converted 'weights/yolov3-spp.pt' to 'weights/yolov3-spp.weights'
 ```
 
-# mAP
+
+## mAP
 
 <i></i>                      |Size |COCO mAP<br>@0.5...0.95 |COCO mAP<br>@0.5 
 ---                          | ---         | ---         | ---
@@ -146,7 +153,7 @@ Speed: 17.5/2.3/19.9 ms inference/NMS/total per 640x640 image at batch-size 16
 <!-- Speed: 11.4/2.2/13.6 ms inference/NMS/total per 608x608 image at batch-size 1 -->
 
 
-# Reproduce Our Results
+## Reproduce Our Results
 
 Run commands below. Training takes about one week on a 2080Ti per model.
 ```bash
@@ -155,17 +162,31 @@ $ python train.py --data coco2014.data --weights '' --batch-size 32 --cfg yolov3
 ```
 <img src="https://user-images.githubusercontent.com/26833433/80831822-57a9de80-8ba0-11ea-9684-c47afb0432dc.png" width="900">
 
-# Reproduce Our Environment
+
+## Reproduce Our Environment
 
 To access an up-to-date working environment (with all dependencies including CUDA/CUDNN, Python and PyTorch preinstalled), consider a:
 
 - **GCP** Deep Learning VM with $300 free credit offer: See our [GCP Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/GCP-Quickstart) 
-- **Google Colab Notebook** with 12 hours of free GPU time: [Google Colab Notebook](https://colab.sandbox.google.com/github/ultralytics/yolov3/blob/master/tutorial.ipynb)
-- **Docker Image** from https://hub.docker.com/r/ultralytics/yolov3. See [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart) 
-# Citation
+- **Google Colab Notebook** with 12 hours of free GPU time. <a href="https://colab.research.google.com/github/ultralytics/yolov3/blob/master/tutorial.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
+- **Docker Image** https://hub.docker.com/r/ultralytics/yolov3. See [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart) ![Docker Pulls](https://img.shields.io/docker/pulls/ultralytics/yolov3?logo=docker)
+
+
+## Citation
 
 [![DOI](https://zenodo.org/badge/146165888.svg)](https://zenodo.org/badge/latestdoi/146165888)
 
-# Contact
 
-**Issues should be raised directly in the repository.** For business inquiries or professional support requests please visit us at https://contact.ultralytics.com.
+## About Us
+
+Ultralytics is a U.S.-based particle physics and AI startup with over 6 years of expertise supporting government, academic and business clients. We offer a wide range of vision AI services, spanning from simple expert advice up to delivery of fully customized, end-to-end production solutions, including:
+- **Cloud-based AI** systems operating on **hundreds of HD video streams in realtime.**
+- **Edge AI** integrated into custom iOS and Android apps for realtime **30 FPS video inference.**
+- **Custom data training**, hyperparameter evolution, and model exportation to any destination.
+
+For business inquiries and professional support requests please visit us at https://www.ultralytics.com. 
+
+
+## Contact
+
+**Issues should be raised directly in the repository.** For business inquiries or professional support requests please visit https://www.ultralytics.com or email Glenn Jocher at glenn.jocher@ultralytics.com. 

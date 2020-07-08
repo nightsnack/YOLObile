@@ -74,7 +74,7 @@ def train(hyp):
     imgsz_min, imgsz_max, imgsz_test = opt.img_size  # img sizes (min, max, test)
 
     # Image Sizes
-    gs = 64  # (pixels) grid size
+    gs = 32  # (pixels) grid size
     assert math.fmod(imgsz_min, gs) == 0, '--img-size %g must be a %g-multiple' % (imgsz_min, gs)
     opt.multi_scale |= imgsz_min != imgsz_max  # multi if different (min, max)
     if opt.multi_scale:
@@ -125,6 +125,16 @@ def train(hyp):
     start_epoch = 0
     best_fitness = 0.0
     attempt_download(weights)
+
+    
+    if opt.freeze_layers:                                                                                                                                                            
+        output_layer_indices = [idx - 1 for idx, module in enumerate(model.module_list) if isinstance(module, YOLOLayer)]                                                                                                                      
+        freeze_layer_indices = [x for x in range(len(model.module_list)) if                                                                                                         
+                                (x not in output_layer_indices) and                                                                                                               
+                                (x - 1 not in output_layer_indices)]                                                                                                                 
+        for idx in freeze_layer_indices:                                                                                                                                             
+            for parameter in model.module_list[idx].parameters():                                                                                                                    
+                parameter.requires_grad_(False)                                                                                                                                      
 
 
     # Mixed precision training https://github.com/NVIDIA/apex
@@ -687,7 +697,6 @@ def train(hyp):
 
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=300)  # 500200 batches at bs 16, 117263 COCO images = 273 epochs
@@ -708,6 +717,9 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
+    parser.add_argument('--freeze-layers', action='store_true', help='Freeze non-output layers')  
+
+
     parser.add_argument('--admm-file', type=str, default='admm', help='admm configuration file')
     parser.add_argument('--trick-file', type=str, default='tricks', help='trick configuration file')
 
@@ -757,10 +769,11 @@ if __name__ == '__main__':
     #     print = logger.info
 
 
-    opt.weights = last if opt.resume else opt.weights
+    opt.weights = last if opt.resume and not opt.weights else opt.weights
+
     check_git_status()
-    opt.cfg = list(glob.iglob('./**/' + opt.cfg, recursive=True))[0]  # find file
-    # opt.data = list(glob.iglob('./**/' + opt.data, recursive=True))[0]  # find file
+    opt.cfg = check_file(opt.cfg)  # check file
+    opt.data = check_file(opt.data)  # check file
     print(opt)
     opt.img_size.extend([opt.img_size[-1]] * (3 - len(opt.img_size)))  # extend to 3 sizes (min, max, test)
     device = torch_utils.select_device(opt.device, apex=mixed_precision, batch_size=opt.batch_size)
