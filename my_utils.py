@@ -313,7 +313,7 @@ def test_sparsity(model, column=True, channel=True, filter=True, kernel=True):
 
 if __name__ == '__main__':
     model = Darknet(cfg = 'cfg/csdarknet53s-panet-spp.cfg',img_size=(320,320))
-    state_dict = torch.load('weights/best51.pt') #model_prunned/yolov3_0.1_config_yolov3_v00_column.pt
+    state_dict = torch.load('weights/best509-10x.pt') #model_prunned/yolov3_0.1_config_yolov3_v00_column.pt
     # new_state_dict = OrderedDict()
     # for k, v in state_dict.items():
     #     name = k[7:]  # remove `module.`
@@ -321,14 +321,14 @@ if __name__ == '__main__':
     # load params
     # model.load_state_dict(new_state_dict)
     model.load_state_dict(state_dict["model"]) ##state_dict["model"]
-    input = torch.randn(1, 3, 512, 512)
-    flops, params = profile(model, inputs=(input, ),verbose=True)
-    print(flops)
-    print()
-    print(params)
+    # input = torch.randn(1, 3, 416, 416)
+    # flops, params = profile(model, inputs=(input, ),verbose=True)
+    # print(flops)
+    # print()
+    # print(params)
 
-    yaml_sparsity_calculator(model,filename1='config_csdarknet53pan_v8')
-    # manually_hard_prune(model,yaml_name='config_yolov3spp_v4',sparsity_type='column' )
+    # yaml_sparsity_calculator(model,filename1='config_csdarknet53pan_v10')
+    manually_hard_prune(model,yaml_name='config_csdarknet53pan_v10',sparsity_type='column' )
     comp_ratio = test_sparsity(model, column=False, channel=False, filter=False, kernel=False)
     print(comp_ratio)
     # 320

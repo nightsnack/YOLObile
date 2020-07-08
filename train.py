@@ -191,7 +191,7 @@ def train(hyp):
         # load model
         try:
             # chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-            model.load_state_dict(chkpt, strict=False)
+            model.load_state_dict(chkpt['model'], strict=False)
         except Exception as e:
             s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
