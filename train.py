@@ -124,7 +124,7 @@ def train(hyp):
 
     start_epoch = 0
     best_fitness = 0.0
-    attempt_download(weights)
+    # attempt_download(weights)
 
     
     if opt.freeze_layers:                                                                                                                                                            
@@ -216,7 +216,7 @@ def train(hyp):
                                     init_method='tcp://127.0.0.1:9999',  # distributed training init method
                                     world_size=1,  # number of nodes for distributed training
                                     rank=0)  # distributed training node rank
-            model = torch.nn.parallel.DistributedDataParallel(model)
+            model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
             model.yolo_layers = model.module.yolo_layers  # move yolo layer indices to top level
 
 
@@ -354,9 +354,9 @@ def train(hyp):
                     pbar.set_description(s)
 
                     # Plot
-                    if ni < 1:
-                        f = 'train_batch%g.jpg' % i  # filename
-                        res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+                    # if ni < 1:
+                    #     f = 'train_batch%g.jpg' % i  # filename
+                        # res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
                         # if tb_writer:
                         #     tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
                         #     # tb_writer.add_graph(model, imgs)  # add model to tensorboard

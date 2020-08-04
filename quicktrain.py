@@ -74,7 +74,7 @@ def train(hyp):
     imgsz_min, imgsz_max, imgsz_test = opt.img_size  # img sizes (min, max, test)
 
     # Image Sizes
-    gs = 64  # (pixels) grid size
+    gs = 32  # (pixels) grid size
     assert math.fmod(imgsz_min, gs) == 0, '--img-size %g must be a %g-multiple' % (imgsz_min, gs)
     opt.multi_scale |= imgsz_min != imgsz_max  # multi if different (min, max)
     if opt.multi_scale:
@@ -124,10 +124,19 @@ def train(hyp):
 
     start_epoch = 0
     best_fitness = 0.0
-    attempt_download(weights)
+    # attempt_download(weights)
 
+    if opt.freeze_layers:
+        output_layer_indices = [idx - 1 for idx, module in enumerate(model.module_list) if
+                                isinstance(module, YOLOLayer)]
+        freeze_layer_indices = [x for x in range(len(model.module_list)) if
+                                (x not in output_layer_indices) and
+                                (x - 1 not in output_layer_indices)]
+        for idx in freeze_layer_indices:
+            for parameter in model.module_list[idx].parameters():
+                parameter.requires_grad_(False)
 
-    # Mixed precision training https://github.com/NVIDIA/apex
+                # Mixed precision training https://github.com/NVIDIA/apex
     if mixed_precision:
         model, optimizer = amp.initialize(model, optimizer, opt_level='O1', verbosity=0)
 
@@ -190,11 +199,12 @@ def train(hyp):
 
         # load model
         try:
-            chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+            # chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
             model.load_state_dict(chkpt['model'], strict=False)
-        except KeyError as e:
+        except Exception as e:
             s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
+            print(e)
             raise KeyError(s) from e
 
         del chkpt
@@ -205,9 +215,8 @@ def train(hyp):
                                     init_method='tcp://127.0.0.1:9999',  # distributed training init method
                                     world_size=1,  # number of nodes for distributed training
                                     rank=0)  # distributed training node rank
-            model = torch.nn.parallel.DistributedDataParallel(model)
+            model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
             model.yolo_layers = model.module.yolo_layers  # move yolo layer indices to top level
-
 
         # Model parameters
         model.nc = nc  # attach number of classes to model
@@ -229,14 +238,13 @@ def train(hyp):
         print('Using %g dataloader workers' % nw)
         print('Starting training for %g epochs...' % epochs)
 
-
-
         for i in range(opt.rho_num):
             current_rho = initial_rho * 10 ** i
             ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=current_rho)
             admm.admm_initialization(opt, ADMM=ADMM, model=model)  # intialize Z variable
 
-            for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
+            for epoch in range(start_epoch,
+                               epochs):  # epoch ------------------------------------------------------------------
                 print("current rho: {}".format(current_rho))
 
                 model.train()
@@ -267,12 +275,14 @@ def train(hyp):
                 if dataset.image_weights:
                     w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
                     image_weights = labels_to_image_weights(dataset.labels, nc=nc, class_weights=w)
-                    dataset.indices = random.choices(range(dataset.n), weights=image_weights, k=dataset.n)  # rand weighted idx
+                    dataset.indices = random.choices(range(dataset.n), weights=image_weights,
+                                                     k=dataset.n)  # rand weighted idx
 
                 mloss = torch.zeros(4).to(device)  # mean losses
                 print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
                 pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
-                for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+                for i, (
+                imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
 
                     ni = i + nb * epoch  # number integrated batches (since train start)
                     imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
@@ -296,7 +306,8 @@ def train(hyp):
                             img_size = random.randrange(grid_min, grid_max + 1) * gs
                         sf = img_size / max(imgs.shape[2:])  # scale factor
                         if sf != 1:
-                            ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to 32-multiple)
+                            ns = [math.ceil(x * sf / gs) * gs for x in
+                                  imgs.shape[2:]]  # new shape (stretched to 32-multiple)
                             imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
                     # Forward
@@ -311,11 +322,10 @@ def train(hyp):
                     # Backward
                     loss *= batch_size / 64  # scale loss
 
-
                     admm.z_u_update(opt, ADMM, model, device, dataloader, optimizer, epoch, imgs, i,
-                                        tb_writer)  # update Z and U variables
+                                    tb_writer)  # update Z and U variables
                     loss, admm_loss, mixed_loss = admm.append_admm_loss(opt, ADMM, model,
-                                                                            loss)  # append admm losss
+                                                                        loss)  # append admm losss
 
                     if mixed_precision:
                         with amp.scale_loss(mixed_loss, optimizer) as scaled_loss:
@@ -339,7 +349,8 @@ def train(hyp):
                     # Print
                     mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                     mem = '%.3gG' % (torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-                    s = ('%10s' * 2 + '%10.3g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
+                    s = ('%10s' * 2 + '%10.3g' * 6) % (
+                    '%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
                     pbar.set_description(s)
 
                     # Plot
@@ -362,7 +373,8 @@ def train(hyp):
                 ema.update_attr(model)
                 final_epoch = epoch + 1 == epochs
                 if not opt.notest:  # Calculate mAP  #or final_epoch
-                    is_coco = any([x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
+                    is_coco = any(
+                        [x in data for x in ['coco.data', 'coco2014.data', 'coco2017.data']]) and model.nc == 80
                     results, maps = test.test(cfg,
                                               data,
                                               batch_size=batch_size,
@@ -412,7 +424,6 @@ def train(hyp):
         torch.cuda.empty_cache()
         return results
 
-
     """=============="""
     """masked retrain"""
     """=============="""
@@ -420,21 +431,24 @@ def train(hyp):
         ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=initial_rho)
         if not opt.resume:
             # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-            # print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
-            # chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
+            # print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1),
+            #                                                                      opt.config_file, opt.sparsity_type))
+            # chkpt = torch.load(
+            #     "./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file,
+            #                                                 opt.sparsity_type), map_location=device)
             chkpt = torch.load(weights, map_location=device)
             # load model
             try:
                 chkpt['model'] = {k: v for k, v in chkpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-                model.load_state_dict(chkpt['model'], strict=False) #['model']
+                model.load_state_dict(chkpt, strict=False)  # ['model']
 
             except KeyError as e:
                 # s = "%s is not compatible with %s. Specify --weights '' or specify a --cfg compatible with %s. " \
                 #     "See https://github.com/ultralytics/yolov3/issues/657" % (opt.weights, opt.cfg, opt.weights)
                 raise KeyError() from e
-            #----------------------------------------------hard prune------------------------------------------------
+            # ----------------------------------------------hard prune------------------------------------------------
             admm.hard_prune(opt, ADMM, model)
-            #----------------------------------------------hard prune------------------------------------------------
+            # ----------------------------------------------hard prune------------------------------------------------
         else:
             try:
                 chkpt = torch.load(weights, map_location=device)
@@ -484,7 +498,8 @@ def train(hyp):
         print('Image sizes %g - %g train, %g test' % (imgsz_min, imgsz_max, imgsz_test))
         print('Using %g dataloader workers' % nw)
         print('Starting training for %g epochs...' % epochs)
-        for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
+        for epoch in range(start_epoch,
+                           epochs):  # epoch ------------------------------------------------------------------
             model.train()
 
             if opt.masked_retrain and not opt.combine_progressive:
@@ -520,7 +535,8 @@ def train(hyp):
             mloss = torch.zeros(4).to(device)  # mean losses
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
-            for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+            for i, (
+            imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
                 # if i > 10:
                 #     break
                 ni = i + nb * epoch  # number integrated batches (since train start)
@@ -589,7 +605,7 @@ def train(hyp):
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = '%.3gG' % (torch.cuda.memory_cached() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
                 s = ('%10s' * 2 + '%10.3g' * 6) % (
-                '%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
+                    '%g/%g' % (epoch, epochs - 1), mem, *mloss, len(targets), img_size)
                 pbar.set_description(s)
 
                 # Plot
@@ -637,11 +653,14 @@ def train(hyp):
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
-            if fi > best_fitness:  #results[2]
-                best_fitness = fi  #results[2]
+            if fi > best_fitness:  # results[2]
+                best_fitness = fi  # results[2]
                 print("\n>_ Got better accuracy, saving model with accuracy {:.3f}% now...\n".format(results[2]))
                 torch.save(ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
-                           "./model_retrained/yolov3_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2], opt.rho_num, opt.config_file, opt.sparsity_type))
+                           "./model_retrained/yolov3_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2],
+                                                                                                  opt.rho_num,
+                                                                                                  opt.config_file,
+                                                                                                  opt.sparsity_type))
 
             # Save model
             save = (not opt.nosave) or (final_epoch and not opt.evolve)
@@ -675,7 +694,7 @@ def train(hyp):
                     ispt = f2.endswith('.pt')  # is *.pt
                     strip_optimizer(f2) if ispt else None  # strip optimizer
                     os.system('gsutil cp %s gs://%s/weights' % (
-                    f2, opt.bucket)) if opt.bucket and ispt else None  # upload
+                        f2, opt.bucket)) if opt.bucket and ispt else None  # upload
 
         if not opt.evolve:
             plot_results()  # save as results.png
@@ -683,8 +702,6 @@ def train(hyp):
         # dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
         torch.cuda.empty_cache()
         return results
-
-
 
 
 if __name__ == '__main__':
@@ -707,10 +724,10 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
+    parser.add_argument('--freeze-layers', action='store_true', help='Freeze non-output layers')
+
     parser.add_argument('--admm-file', type=str, default='admm', help='admm configuration file')
     parser.add_argument('--trick-file', type=str, default='tricks', help='trick configuration file')
-
-
 
     opt = parser.parse_args()
     if (opt.admm_file):
@@ -755,11 +772,11 @@ if __name__ == '__main__':
     #     global print
     #     print = logger.info
 
+    opt.weights = last if opt.resume and not opt.weights else opt.weights
 
-    opt.weights = last if opt.resume else opt.weights
     check_git_status()
-    opt.cfg = list(glob.iglob('./**/' + opt.cfg, recursive=True))[0]  # find file
-    # opt.data = list(glob.iglob('./**/' + opt.data, recursive=True))[0]  # find file
+    opt.cfg = check_file(opt.cfg)  # check file
+    opt.data = check_file(opt.data)  # check file
     print(opt)
     opt.img_size.extend([opt.img_size[-1]] * (3 - len(opt.img_size)))  # extend to 3 sizes (min, max, test)
     device = torch_utils.select_device(opt.device, apex=mixed_precision, batch_size=opt.batch_size)
@@ -830,6 +847,7 @@ if __name__ == '__main__':
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
