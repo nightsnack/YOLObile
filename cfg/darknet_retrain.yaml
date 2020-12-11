@@ -1,0 +1,24 @@
+admm:
+  False
+masked-retrain:
+  True
+admm-epochs:
+  6
+rho:
+  0.0001
+rho-num:
+  4
+sparsity-type:
+  block-reorder
+config-file:
+  config_csdarknet53pan_slv8
+combine-progressive:
+  False
+verbose:
+  True
+logger:
+  True
+log-interval:
+  10
+no-tricks:
+  False
