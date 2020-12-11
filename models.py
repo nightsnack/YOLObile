@@ -346,6 +346,9 @@ class Darknet(nn.Module):
     def info(self, verbose=False):
         torch_utils.model_info(self, verbose)
 
+    def prunedinfo(self, verbose=False):
+        return torch_utils.prunned_model_info(self, verbose)
+
 
 def get_yolo_layers(model):
     return [i for i, m in enumerate(model.module_list) if m.__class__.__name__ == 'YOLOLayer']  # [89, 101, 113]

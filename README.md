@@ -1,192 +1,175 @@
 
-# Training
 
-**ADMM: Training:** `python3 train.py --img-size 320 --batch-size 64 --device 0,1 --epoch 25 --multi-scale` admm does not support resume.
+# YOLObile 
+This is the implementation of [YOLObile: Real-Time Object Detection on Mobile Devices via Compression-Compilation Co-Design](https://arxiv.org/abs/2009.05697) using [ultralytics/yolov3](https://github.com/ultralytics/yolov3). Thanks to the original author.
 
-**Masked Retrained:** `python3 train.py --img-size 320 --batch-size 64 --device 0,1 --epoch 300 --multi-scale`.
+arXiv: [https://arxiv.org/abs/2009.05697](https://arxiv.org/abs/2009.05697)
+In Proceeding in AAAI 2021
 
-**Masked Retrained Resume:** `python3 train.py --img-size 320 --batch-size 64 --device 0,1 --epoch 300 --multi-scale --resume` to resume training from `weights/last.pt`.
+![Image of YOLObile](figure/yolo_demo.jpg)
 
-#Extra config:
+## News!
+On Dec.11, a demo apk (yolo_demo.apk) for Android devices (require Android 10.0) is released.
 
-**ADMM:** `--admm-file cfg/youradmmfile.yaml`
+## Introduction
+The rapid development and wide utilization of object detection techniques have aroused attention on both accuracy and speed of object detectors. However, the current state-of-the-art object detection works are either accuracy-oriented using a large model but leading to high latency
+or speed-oriented using a lightweight model but sacrificing accuracy. In this work, we propose YOLObile framework, a real-time object detection on mobile devices via compression-compilation co-design. A novel block-punched pruning scheme is proposed for any kernel size. To improve computational efficiency on mobile devices, a GPU-CPU collaborative  scheme is adopted along with advanced compiler-assisted optimizations. Experimental results indicate that our pruning scheme achieves 14x compression rate of YOLOv4 with 49.0 mAP. 
+Under our YOLObile framework, we achieve 17 FPS inference speed using GPU on Samsung Galaxy S20. 
+By incorporating our proposed GPU-CPU collaborative scheme, the inference speed is increased to 19.1 FPS, and outperforms the original YOLOv4 by 5x speedup.
 
-**ADMM Load weights:** `--weights weights/yourweights.pt`
-
-**Model Backbone:** `--cfg cfg/yolov3-spp.cfg`
-
-
-# Introduction
-
-This directory contains PyTorch YOLOv3 software developed by Ultralytics LLC, and **is freely available for redistribution under the GPL-3.0 license**. For more information please visit https://www.ultralytics.com.
-
-# Description
-
-The https://github.com/ultralytics/yolov3 repo contains inference and training code for YOLOv3 in PyTorch. The code works on Linux, MacOS and Windows. Training is done on the COCO dataset by default: https://cocodataset.org/#home. **Credit to Joseph Redmon for YOLO:** https://pjreddie.com/darknet/yolo/.
-
-# Requirements
-
+## Environments
 Python 3.7 or later with all `pip install -U -r requirements.txt` packages including `torch >= 1.5`. Docker images come with all dependencies preinstalled. Docker requirements are: 
 - Nvidia Driver >= 440.44
 - Docker Engine - CE >= 19.03
 
-# Tutorials
+### Download Coco Dataset: (18 GB)
+```shell script
+cd ../ && sh YOLObile/data/get_coco2014.sh
+```
+The default path for coco data folder is outside the project root folder.
 
-* [Train Custom Data](https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data) < highly recommended!!
-* [Train Single Class](https://github.com/ultralytics/yolov3/wiki/Example:-Train-Single-Class)
-* [Google Colab Notebook](https://colab.research.google.com/github/ultralytics/yolov3/blob/master/tutorial.ipynb) with quick training, inference and testing examples
-
-* [GCP Quickstart](https://github.com/ultralytics/yolov3/wiki/GCP-Quickstart)
-* [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart)  ![Docker Pulls](https://img.shields.io/docker/pulls/ultralytics/yolov3?logo=docker)
-* [A TensorRT Implementation of YOLOv3 and YOLOv4](https://github.com/wang-xinyu/tensorrtx/tree/master/yolov3-spp) 
-
-# \>_<
-
-<img src="https://user-images.githubusercontent.com/26833433/78175826-599d4800-7410-11ea-87d4-f629071838f6.png" width="900">
-
-
-### Image Augmentation
-
-`datasets.py` applies OpenCV-powered (https://opencv.org/) augmentation to the input image. We use a **mosaic dataloader** to increase image variability during training.
-
-<img src="https://user-images.githubusercontent.com/26833433/80769557-6e015d00-8b02-11ea-9c4b-69310eb2b962.jpg" width="900">
-
-
-### Speed
-
-https://cloud.google.com/deep-learning-vm/  
-**Machine type:** preemptible [n1-standard-8](https://cloud.google.com/compute/docs/machine-types) (8 vCPUs, 30 GB memory)   
-**CPU platform:** Intel Skylake  
-**GPUs:** K80 ($0.14/hr), T4 ($0.11/hr), V100 ($0.74/hr) CUDA with [Nvidia Apex](https://github.com/NVIDIA/apex) FP16/32    
-**HDD:** 300 GB SSD  
-**Dataset:** COCO train 2014 (117,263 images)  
-**Model:** `yolov3-spp.cfg`  
-**Command:**  `python3 train.py --data coco2017.data --img 416 --batch 32`
-
-GPU | n | `--batch-size` | img/s | epoch<br>time | epoch<br>cost
---- |--- |--- |--- |--- |---
-K80    |1| 32 x 2 | 11  | 175 min  | $0.41
-T4     |1<br>2| 32 x 2<br>64 x 1 | 41<br>61 | 48 min<br>32 min | $0.09<br>$0.11
-V100   |1<br>2| 32 x 2<br>64 x 1 | 122<br>**178** | 16 min<br>**11 min** | **$0.21**<br>$0.28
-2080Ti |1<br>2| 32 x 2<br>64 x 1 | 81<br>140 | 24 min<br>14 min | -<br>-
-
-
-## Inference
-
-```bash
-python3 detect.py --source ...
+``` shell script
+/Project
+/Project/YOLObile (Project root)
+/Project/coco (coco data)
 ```
 
-- Image:  `--source file.jpg`
-- Video:  `--source file.mp4`
-- Directory:  `--source dir/`
-- Webcam:  `--source 0`
-- RTSP stream:  `--source rtsp://170.93.143.139/rtplive/470011e600ef003a004ee33696235daa`
-- HTTP stream:  `--source http://112.50.243.8/PLTV/88888888/224/3221225900/1.m3u8`
+### Download Model Checkpoints:
+Google Drive: [Google Drive Download](https://drive.google.com/drive/folders/1FcWdXcWc3vScV-guIrxWsWGhjQwPOEQW?usp=sharing)
 
-**YOLOv3:** `python3 detect.py --cfg cfg/yolov3.cfg --weights yolov3.pt`  
-<img src="https://user-images.githubusercontent.com/26833433/64067835-51d5b500-cc2f-11e9-982e-843f7f9a6ea2.jpg" width="500">
+Baidu Netdisk: [Baidu Netdisk Download](https://pan.baidu.com/s/1FMTOQF6ebH6OJWEAq9F0KQ) code: r3nk
 
-**YOLOv3-tiny:** `python3 detect.py --cfg cfg/yolov3-tiny.cfg --weights yolov3-tiny.pt`  
-<img src="https://user-images.githubusercontent.com/26833433/64067834-51d5b500-cc2f-11e9-9357-c485b159a20b.jpg" width="500">
-
-**YOLOv3-SPP:** `python3 detect.py --cfg cfg/yolov3-spp.cfg --weights yolov3-spp.pt`  
-<img src="https://user-images.githubusercontent.com/26833433/64067833-51d5b500-cc2f-11e9-8208-6fe197809131.jpg" width="500">
+After downloads, please put the weight file under ./weights folder
 
 
-## Pretrained Checkpoints
+## Docker build instructions
 
-Download from: [https://drive.google.com/open?id=1LezFG5g3BCW6iYaV89B2i64cqEUZD7e0](https://drive.google.com/open?id=1LezFG5g3BCW6iYaV89B2i64cqEUZD7e0)
+### 1. Install Docker and Nvidia-Docker
 
+Docker images come with all dependencies preinstalled, however Docker itself requires installation, and relies of nvidia driver installations in order to interact properly with local GPU resources. The requirements are: 
+- Nvidia Driver >= 440.44 https://www.nvidia.com/Download/index.aspx
+- Nvidia-Docker https://github.com/NVIDIA/nvidia-docker
+- Docker Engine - CE >= 19.03 https://docs.docker.com/install/
 
-## Darknet Conversion
-
+### 2. Build the project
 ```bash
-$ git clone https://github.com/ultralytics/yolov3 && cd yolov3
-
-# convert darknet cfg/weights to pytorch model
-$ python3  -c "from models import *; convert('cfg/yolov3-spp.cfg', 'weights/yolov3-spp.weights')"
-Success: converted 'weights/yolov3-spp.weights' to 'weights/yolov3-spp.pt'
-
-# convert cfg/pytorch model to darknet weights
-$ python3  -c "from models import *; convert('cfg/yolov3-spp.cfg', 'weights/yolov3-spp.pt')"
-Success: converted 'weights/yolov3-spp.pt' to 'weights/yolov3-spp.weights'
+# Build and Push
+t=YOLObile && sudo docker build -t $t .
 ```
 
-
-## mAP
-
-<i></i>                      |Size |COCO mAP<br>@0.5...0.95 |COCO mAP<br>@0.5 
----                          | ---         | ---         | ---
-YOLOv3-tiny<br>YOLOv3<br>YOLOv3-SPP<br>**[YOLOv3-SPP-ultralytics](https://drive.google.com/open?id=1UcR-zVoMs7DH5dj3N1bswkiQTA4dmKF4)** |320 |14.0<br>28.7<br>30.5<br>**37.7** |29.1<br>51.8<br>52.3<br>**56.8**
-YOLOv3-tiny<br>YOLOv3<br>YOLOv3-SPP<br>**[YOLOv3-SPP-ultralytics](https://drive.google.com/open?id=1UcR-zVoMs7DH5dj3N1bswkiQTA4dmKF4)** |416 |16.0<br>31.2<br>33.9<br>**41.2** |33.0<br>55.4<br>56.9<br>**60.6**
-YOLOv3-tiny<br>YOLOv3<br>YOLOv3-SPP<br>**[YOLOv3-SPP-ultralytics](https://drive.google.com/open?id=1UcR-zVoMs7DH5dj3N1bswkiQTA4dmKF4)** |512 |16.6<br>32.7<br>35.6<br>**42.6** |34.9<br>57.7<br>59.5<br>**62.4**
-YOLOv3-tiny<br>YOLOv3<br>YOLOv3-SPP<br>**[YOLOv3-SPP-ultralytics](https://drive.google.com/open?id=1UcR-zVoMs7DH5dj3N1bswkiQTA4dmKF4)** |608 |16.6<br>33.1<br>37.0<br>**43.1** |35.4<br>58.2<br>60.7<br>**62.8**
-
-- mAP@0.5 run at `--iou-thr 0.5`, mAP@0.5...0.95 run at `--iou-thr 0.7`
-- Darknet results: https://arxiv.org/abs/1804.02767
-
+### 3. Run Container
 ```bash
-$ python3 test.py --cfg yolov3-spp.cfg --weights yolov3-spp-ultralytics.pt --img 640 --augment
-
-Namespace(augment=True, batch_size=16, cfg='cfg/yolov3-spp.cfg', conf_thres=0.001, data='coco2014.data', device='', img_size=640, iou_thres=0.6, save_json=True, single_cls=False, task='test', weights='weight
-Using CUDA device0 _CudaDeviceProperties(name='Tesla V100-SXM2-16GB', total_memory=16130MB)
-
-               Class    Images   Targets         P         R   mAP@0.5        F1: 100%|█████████| 313/313 [03:00<00:00,  1.74it/s]
-                 all     5e+03  3.51e+04     0.375     0.743      0.64     0.492
-
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.456
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.647
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.496
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.263
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.501
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.596
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.361
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.597
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.666
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.492
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.719
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.810
-
-Speed: 17.5/2.3/19.9 ms inference/NMS/total per 640x640 image at batch-size 16
+# Pull and Run with local directory access
+t=YOLObile && sudo docker run -it --gpus all --ipc=host -v "$(pwd)"your/cocodata/path:/usr/src/coco $t bash
 ```
-<!-- Speed: 11.4/2.2/13.6 ms inference/NMS/total per 608x608 image at batch-size 1 -->
 
+### 4. Run Commands
+Once the container is launched and you are inside it, you will have a terminal window in which you can run all regular bash commands, such as:
+- `ls .`
+- `ls ../coco`
+- `python train.py`
+- `python test.py`
+- `python detect.py`
 
-## Reproduce Our Results
+## Configurations:
 
-Run commands below. Training takes about one week on a 2080Ti per model.
-```bash
-$ python train.py --data coco2014.data --weights '' --batch-size 16 --cfg yolov3-spp.cfg
-$ python train.py --data coco2014.data --weights '' --batch-size 32 --cfg yolov3-tiny.cfg
+**Train Options and Model Config:** 
 ```
-<img src="https://user-images.githubusercontent.com/26833433/80831822-57a9de80-8ba0-11ea-9684-c47afb0432dc.png" width="900">
+./cfg/csdarknet53s-panet-spp.cfg (model configuration)
+./cfg/darknet_admm.yaml (pruning configuration)
+./cfg/darknet_retrain.yaml (retrain configuration)
+```
+
+**Weights:** 
+```
+./weights/yolov4dense.pt (dense model)
+./weights/best8x-514.pt (pruned model)
+```
+
+**Prune Config**
+```
+./prune_config/config_csdarknet53pan_v*.yaml
+```
+
+## Training
+
+The training process includes two steps:
+
+**Pruning:** `python train.py --img-size 320 --batch-size 64 --device 0,1,2,3 --epoch 25 --admm-file darknet_admm --cfg cfg/csdarknet53s-panet-spp.cfg --weights weights/yolov4dense.pt --data data/coco2014.data` 
+
+The pruning process does **NOT** support resume.
+
+**Masked Retrain:** `python train.py --img-size 320 --batch-size 64 --device 0,1,2,3 --epoch 280 --admm-file darknet_retrain --cfg cfg/csdarknet53s-panet-spp.cfg --weights weights/yolov4dense.pt --data data/coco2014.data --multi-scale`.
+
+The masked retrain process support resume.
+
+You can run the total process via `sh ./runprune.sh`
 
 
-## Reproduce Our Environment
 
-To access an up-to-date working environment (with all dependencies including CUDA/CUDNN, Python and PyTorch preinstalled), consider a:
+## Check model Weight Parameters & Flops:
+```shell script
+python check_compression.py
+```
+## Test model MAP:
 
-- **GCP** Deep Learning VM with $300 free credit offer: See our [GCP Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/GCP-Quickstart) 
-- **Google Colab Notebook** with 12 hours of free GPU time. <a href="https://colab.research.google.com/github/ultralytics/yolov3/blob/master/tutorial.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
-- **Docker Image** https://hub.docker.com/r/ultralytics/yolov3. See [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart) ![Docker Pulls](https://img.shields.io/docker/pulls/ultralytics/yolov3?logo=docker)
+```shell script
+python test.py --img-size 320 --batch-size 64 --device 0 --cfg cfg/csdarknet53s-panet-spp.cfg --weights weights/best8x-514.pt --data data/coco2014.data
+
+```
+```
+               Class    Images   Targets         P         R   mAP@0.5        F1: 100%|| 79/79 [00:
+                 all     5e+03  3.51e+04     0.501     0.544     0.508     0.512
+              person     5e+03  1.05e+04     0.643     0.697     0.698     0.669
+             bicycle     5e+03       313     0.464     0.409     0.388     0.435
+                 car     5e+03  1.64e+03     0.492     0.547     0.503     0.518
+          motorcycle     5e+03       388     0.602     0.635     0.623     0.618
+            airplane     5e+03       131     0.676     0.786     0.804     0.727
+                 bus     5e+03       259      0.67     0.788     0.792     0.724
+               train     5e+03       212     0.731     0.797     0.805     0.763
+               truck     5e+03       352     0.414     0.526     0.475     0.463
+          toothbrush     5e+03        77      0.35     0.301     0.269     0.323
+Speed: 3.6/1.4/5.0 ms inference/NMS/total per 320x320 image at batch-size 64
+
+COCO mAP with pycocotools...
+loading annotations into memory...
+Done (t=3.87s)
+creating index...
+index created!
+Loading and preparing results...
+DONE (t=3.74s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=83.06s).
+Accumulating evaluation results...
+DONE (t=9.39s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.334
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.514
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.350
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.117
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.374
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.519
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.295
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.504
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.240
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.583
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.727
+```
+
+## FPS vs mAP on COCO dataset
+![Image of YOLObile](figure/yolobilemap.png)
 
 
-## Citation
+## Already Known Issues
+When you use multi-card training（4 cards or more ), the training process may stop after a few hours without any errors printed.
+I suggest using docker instead if you use 4 cards or more. The docker build instructions can be found above.
 
-[![DOI](https://zenodo.org/badge/146165888.svg)](https://zenodo.org/badge/latestdoi/146165888)
-
-
-## About Us
-
-Ultralytics is a U.S.-based particle physics and AI startup with over 6 years of expertise supporting government, academic and business clients. We offer a wide range of vision AI services, spanning from simple expert advice up to delivery of fully customized, end-to-end production solutions, including:
-- **Cloud-based AI** systems operating on **hundreds of HD video streams in realtime.**
-- **Edge AI** integrated into custom iOS and Android apps for realtime **30 FPS video inference.**
-- **Custom data training**, hyperparameter evolution, and model exportation to any destination.
-
-For business inquiries and professional support requests please visit us at https://www.ultralytics.com. 
-
+## Acknowledgements
+[https://github.com/ultralytics/yolov3](https://github.com/ultralytics/yolov3)
+[https://github.com/AlexeyAB/darknet](https://github.com/AlexeyAB/darknet)
 
 ## Contact
-
-**Issues should be raised directly in the repository.** For business inquiries or professional support requests please visit https://www.ultralytics.com or email Glenn Jocher at glenn.jocher@ultralytics.com. 
+[Nightsnack](https://github.com/nightsnack)

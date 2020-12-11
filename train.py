@@ -12,7 +12,7 @@ import admm
 import test  # import test.py to get mAP after each epoch
 from admm import GradualWarmupScheduler
 from models import *
-from testers import test_sparsity
+from check_compression import test_sparsity
 from utils.datasets import *
 from utils.utils import *
 
@@ -412,7 +412,7 @@ def train(hyp):
             print("Saving model.")
             torch.save(
                 model.module.state_dict() if type(model) is nn.parallel.DistributedDataParallel else model.state_dict(),
-                "./model_prunned/yolov3_{}_{}_{}.pt".format(
+                "./model_pruned/yolov4_{}_{}_{}.pt".format(
                     current_rho, opt.config_file, opt.sparsity_type))
 
         if not opt.evolve:
@@ -430,8 +430,8 @@ def train(hyp):
         ADMM = admm.ADMM(model, file_name="./prune_config/" + opt.config_file + ".yaml", rho=initial_rho)
         if not opt.resume:
             # possible weights are '*.pt', 'yolov3-spp.pt', 'yolov3-tiny.pt' etc.
-            print("\n>_ Loading file: ./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
-            chkpt = torch.load("./model_prunned/yolov3_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
+            print("\n>_ Loading file: ./model_pruned/yolov4_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type))
+            chkpt = torch.load("./model_pruned/yolov4_{}_{}_{}.pt".format(initial_rho * 10 ** (opt.rho_num - 1), opt.config_file, opt.sparsity_type), map_location=device)
             # chkpt = torch.load(weights, map_location=device)
             # load model
             try:
@@ -649,7 +649,7 @@ def train(hyp):
                 best_fitness = fi  #results[2]
                 print("\n>_ Got better accuracy, saving model with accuracy {:.3f}% now...\n".format(results[2]))
                 torch.save(ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
-                           "./model_retrained/yolov3_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2], opt.rho_num, opt.config_file, opt.sparsity_type))
+                           "./model_retrained/yolov4_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2], opt.rho_num, opt.config_file, opt.sparsity_type))
 
             # Save model
             save = (not opt.nosave) or (final_epoch and not opt.evolve)
@@ -671,7 +671,7 @@ def train(hyp):
             # end epoch ----------------------------------------------------------------------------------------------------
         # end training
 
-        test_sparsity(model, column=True, channel=False, filter=False)
+        test_sparsity(model)
         print("Best Acc: {:.4f}".format(results[2]))
         n = opt.name
         if len(n):
@@ -698,7 +698,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=300)  # 500200 batches at bs 16, 117263 COCO images = 273 epochs
     parser.add_argument('--batch-size', type=int, default=16)  # effective bs = batch_size * accumulate = 16 * 4 = 64
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='*.cfg path')
+    parser.add_argument('--cfg', type=str, default='cfg/csdarknet53s-panet-spp.cfg', help='*.cfg path')
     parser.add_argument('--data', type=str, default='data/coco2014.data', help='*.data path')
     parser.add_argument('--multi-scale', action='store_true', help='adjust (67%% - 150%%) img_size every 10 batches')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 640], help='[min_train, max-train, test]')
@@ -709,7 +709,7 @@ if __name__ == '__main__':
     parser.add_argument('--evolve', action='store_true', help='evolve hyperparameters')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
-    parser.add_argument('--weights', type=str, default='weights/yolov3-spp-ultralytics.pt', help='initial weights path')
+    parser.add_argument('--weights', type=str, default='weights/yolov4dense.pt', help='initial weights path')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
@@ -718,7 +718,6 @@ if __name__ == '__main__':
 
 
     parser.add_argument('--admm-file', type=str, default='admm', help='admm configuration file')
-    parser.add_argument('--trick-file', type=str, default='tricks', help='trick configuration file')
 
 
 

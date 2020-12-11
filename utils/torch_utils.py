@@ -8,6 +8,8 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.functional as F
 
+from utils import profile_local
+
 
 def init_seeds(seed=0):
     torch.manual_seed(seed)
@@ -113,7 +115,28 @@ def model_info(model, verbose=False):
         fs = ''
 
     print('Model Summary: %g layers, %g parameters, %g gradients%s' % (len(list(model.parameters())), n_p, n_g, fs))
+    return n_p, macs
 
+def prunned_model_info(model, verbose=False):
+    # Plots a line-by-line description of a PyTorch model
+    n_p = sum(x.numel() for x in model.parameters())  # number parameters
+    n_g = sum(x.numel() for x in model.parameters() if x.requires_grad)  # number gradients
+    if verbose:
+        print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
+        for i, (name, p) in enumerate(model.named_parameters()):
+            name = name.replace('module_list.', '')
+            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
+                  (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
+
+    try:  # FLOPS
+        # from thop import profile
+        macs, n_p = profile_local.profile(model, inputs=(torch.zeros(1, 3, 320, 320),), verbose=False)
+        fs = ', %.1f GFLOPS' % (macs / 1E9 * 2)
+    except:
+        fs = ''
+
+    print('Model Summary: %g layers, %g parameters %s' % (len(list(model.parameters())), n_p, fs))
+    return n_p, macs
 
 def load_classifier(name='resnet101', n=2):
     # Loads a pretrained model reshaped to n-class output

@@ -12,7 +12,7 @@ def test(cfg,
          data,
          weights=None,
          batch_size=16,
-         imgsz=416,
+         imgsz=320,
          conf_thres=0.001,
          iou_thres=0.7,  # for nms
          save_json=False,
