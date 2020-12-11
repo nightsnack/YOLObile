@@ -169,7 +169,10 @@ I suggest using docker instead if you use 4 cards or more. The docker build inst
 
 ## Acknowledgements
 [https://github.com/ultralytics/yolov3](https://github.com/ultralytics/yolov3)
+
 [https://github.com/AlexeyAB/darknet](https://github.com/AlexeyAB/darknet)
 
-## Contact
-[Nightsnack](https://github.com/nightsnack)
+## Contact Me
+Github: [https://github.com/nightsnack](https://github.com/nightsnack) 
+
+Email : nightsnackc@gmail.com
