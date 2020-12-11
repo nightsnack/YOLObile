@@ -124,7 +124,7 @@ def train(hyp):
 
     start_epoch = 0
     best_fitness = 0.0
-    attempt_download(weights)
+    # attempt_download(weights)
 
     
     if opt.freeze_layers:                                                                                                                                                            
@@ -216,7 +216,7 @@ def train(hyp):
                                     init_method='tcp://127.0.0.1:9999',  # distributed training init method
                                     world_size=1,  # number of nodes for distributed training
                                     rank=0)  # distributed training node rank
-            model = torch.nn.parallel.DistributedDataParallel(model)
+            model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
             model.yolo_layers = model.module.yolo_layers  # move yolo layer indices to top level
 
 
@@ -284,7 +284,6 @@ def train(hyp):
                 print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
                 pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
                 for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-
                     ni = i + nb * epoch  # number integrated batches (since train start)
                     imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
                     targets = targets.to(device)
@@ -354,9 +353,9 @@ def train(hyp):
                     pbar.set_description(s)
 
                     # Plot
-                    if ni < 1:
-                        f = 'train_batch%g.jpg' % i  # filename
-                        res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+                    # if ni < 1:
+                    #     f = 'train_batch%g.jpg' % i  # filename
+                        # res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
                         # if tb_writer:
                         #     tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
                         #     # tb_writer.add_graph(model, imgs)  # add model to tensorboard
@@ -419,9 +418,9 @@ def train(hyp):
         if not opt.evolve:
             plot_results()  # save as results.png
         print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
-        dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
-        torch.cuda.empty_cache()
-        return results
+        # dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
+        # torch.cuda.empty_cache()
+        # return results
 
 
     """=============="""
@@ -532,8 +531,6 @@ def train(hyp):
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
             for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-                # if i > 10:
-                #     break
                 ni = i + nb * epoch  # number integrated batches (since train start)
                 imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
                 targets = targets.to(device)
@@ -692,7 +689,7 @@ def train(hyp):
             plot_results()  # save as results.png
         print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
         # dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         return results
 
 
@@ -772,8 +769,8 @@ if __name__ == '__main__':
     opt.weights = last if opt.resume and not opt.weights else opt.weights
 
     check_git_status()
-    opt.cfg = check_file(opt.cfg)  # check file
-    opt.data = check_file(opt.data)  # check file
+    # opt.cfg = check_file(opt.cfg)  # check file
+    # opt.data = check_file(opt.data)  # check file
     print(opt)
     opt.img_size.extend([opt.img_size[-1]] * (3 - len(opt.img_size)))  # extend to 3 sizes (min, max, test)
     device = torch_utils.select_device(opt.device, apex=mixed_precision, batch_size=opt.batch_size)
@@ -788,7 +785,7 @@ if __name__ == '__main__':
         print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
         tb_writer = SummaryWriter(comment=opt.name)
         train(hyp)  # train normally
-
+        # exit(0)
     else:  # Evolve hyperparameters (optional)
         opt.notest, opt.nosave = True, True  # only test/save final epoch
         if opt.bucket:

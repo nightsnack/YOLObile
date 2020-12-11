@@ -24,6 +24,25 @@ class Concat(nn.Module):
     def forward(self, x):
         return torch.cat(x, self.d)
 
+class RouteGroup(nn.Module):
+
+    def __init__(self, layers, groups, group_id):
+        super(RouteGroup, self).__init__()
+        self.layers = layers
+        self.multi = len(layers) > 1
+        self.groups = groups
+        self.group_id = group_id
+
+    def forward(self, x, outputs):
+        if self.multi:
+            outs = []
+            for layer in self.layers:
+                out = torch.chunk(outputs[layer], self.groups, dim=1)
+                outs.append(out[self.group_id])
+            return torch.cat(outs, dim=1)
+        else:
+            out = torch.chunk(outputs[self.layers[0]], self.groups, dim=1)
+            return out[self.group_id]
 
 class FeatureConcat(nn.Module):
     def __init__(self, layers):

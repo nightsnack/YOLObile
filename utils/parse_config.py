@@ -38,7 +38,7 @@ def parse_model_cfg(path):
                     mdefs[-1][key] = val  # return string
 
     # Check all fields are supported
-    supported = ['type', 'batch_normalize', 'filters', 'size', 'stride', 'pad', 'activation', 'layers', 'groups',
+    supported = ['type', 'batch_normalize', 'filters', 'size', 'stride', 'pad', 'activation', 'layers', 'groups', 'group_id', 'resize',
                  'from', 'mask', 'anchors', 'classes', 'num', 'jitter', 'ignore_thresh', 'truth_thresh', 'random',
                  'stride_x', 'stride_y', 'weights_type', 'weights_normalization', 'scale_x_y', 'beta_nms', 'nms_kind',
                  'iou_loss', 'iou_normalizer', 'cls_normalizer', 'iou_thresh', 'probability']
