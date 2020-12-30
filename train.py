@@ -284,6 +284,7 @@ def train(hyp):
                 print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
                 pbar = tqdm(enumerate(dataloader), total=nb)  # progress bar
                 for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+
                     ni = i + nb * epoch  # number integrated batches (since train start)
                     imgs = imgs.to(device).float() / 255.0  # uint8 to float32, 0 - 255 to 0.0 - 1.0
                     targets = targets.to(device)
@@ -647,9 +648,9 @@ def train(hyp):
             fi = fitness(np.array(results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
             if fi > best_fitness:  #results[2]
                 best_fitness = fi  #results[2]
-                print("\n>_ Got better accuracy, saving model with accuracy {:.3f}% now...\n".format(results[2]))
-                torch.save(ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
-                           "./model_retrained/yolov4_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2], opt.rho_num, opt.config_file, opt.sparsity_type))
+                print("\n>_ Got better accuracy {:.3f}% now...\n".format(results[2]))
+                # torch.save(ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
+                #            "./model_retrained/yolov4_retrained_acc_{:.3f}_{}rhos_{}_{}.pt".format(results[2], opt.rho_num, opt.config_file, opt.sparsity_type))
 
             # Save model
             save = (not opt.nosave) or (final_epoch and not opt.evolve)
@@ -735,34 +736,15 @@ if __name__ == '__main__':
                 opt.config_file = raw_dict['config-file']
                 opt.combine_progressive = raw_dict['combine-progressive']
                 opt.verbose = raw_dict['verbose']
-                opt.logger = raw_dict['logger']
-                opt.log_interval = raw_dict['log-interval']
-                opt.no_tricks = raw_dict['no-tricks']
                 opt.lr = hyp['lr0']
             except yaml.YAMLError as exc:
                 exit(1)
 
-    if (opt.trick_file):
-        with open(os.path.join('cfg', opt.trick_file + ".yaml"), "r") as stream:
-            try:
-                raw_dict = yaml.load(stream, Loader=yaml.FullLoader)
-                opt.mixup = raw_dict['mixup']
-                opt.alpha = raw_dict['alpha']
-                opt.smooth = raw_dict['smooth']
-                opt.smooth_eps = raw_dict['smooth-eps']
-            except yaml.YAMLError as exc:
-                exit(1)
 
-    # if opt.logger:
-    #     logging.basicConfig(level=logging.INFO, format='%(message)s')
-    #     logger = logging.getLogger()
-    #     try:
-    #         os.makedirs("logger", exist_ok=True)
-    #     except TypeError:
-    #         raise Exception("Direction not create!")
-    #     logger.addHandler(logging.FileHandler(strftime('logger/CIFAR_%m-%d-%Y-%H:%M.log'), 'a'))
-    #     global print
-    #     print = logger.info
+    # opt.mixup = True
+    # opt.alpha = 0.3
+    # opt.smooth = True
+    # opt.smooth_eps = 0.1
 
 
     opt.weights = last if opt.resume and not opt.weights else opt.weights

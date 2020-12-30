@@ -126,65 +126,10 @@ def weight_pruning(args, weight, prune_ratio, cross_x=4, cross_f=1):
             np.float32)  # has to convert bool to float32 for numpy-tensor conversion
         weight[under_threshold] = 0
         return torch.from_numpy(above_threshold).cuda(), torch.from_numpy(weight).cuda()
-
-    elif (args.sparsity_type == "crossbar"):
-        shape = weight.shape
-        weight2d = weight.reshape(shape[0], -1)
-        shape2d = weight2d.shape
-        crossbar_num_f = math.ceil(shape2d[0] / cross_f)
-        crossbar_num_x = math.ceil(shape2d[1] / cross_x)
-
-        for x in range(crossbar_num_x):
-            # print("x={}/{}".format(x,crossbar_num_x))
-            for f in range(crossbar_num_f):
-                # print("f={}/{}".format(f, crossbar_num_f))
-                if x != crossbar_num_x - 1 and f != crossbar_num_f - 1:
-                    frag = weight2d[f * cross_f:(f + 1) * cross_f, x * cross_x:(x + 1) * cross_x]
-
-                elif x == crossbar_num_x - 1 and f != crossbar_num_f - 1:
-                    frag = weight2d[f * cross_f:(f + 1) * cross_f, x * cross_x:shape2d[1]]
-
-                elif x != crossbar_num_x - 1 and f == crossbar_num_f - 1:
-                    frag = weight2d[f * cross_f:shape2d[0], x * cross_x:(x + 1) * cross_x]
-
-                else:  # x == crossbar_num_x - 1 and f == crossbar_num_f - 1:
-                    frag = weight2d[f * cross_f:shape2d[0], x * cross_x:shape2d[1]]
-
-                total = np.sum(frag)
-                if total >= 0:
-                    index = (frag < 0)
-                    frag[index] = 0
-                else:
-                    index = (frag > 0)
-                    frag[index] = 0
-                # change frag will change weight2d as well
-        above_threshold = weight != 0
-        above_threshold = above_threshold.astype(np.float32)
-        return torch.from_numpy(above_threshold).cuda(), torch.from_numpy(weight).cuda()
-
     elif (args.sparsity_type == "column"):
         shape = weight.shape
         weight2d = weight.reshape(shape[0], -1)
         shape2d = weight2d.shape
-        column_l2_norm = LA.norm(weight2d, 2, axis=0)
-        percentile = np.percentile(column_l2_norm, percent)
-        under_threshold = column_l2_norm < percentile
-        above_threshold = column_l2_norm > percentile
-        weight2d[:, under_threshold] = 0
-        above_threshold = above_threshold.astype(np.float32)
-        expand_above_threshold = np.zeros(shape2d, dtype=np.float32)
-        for i in range(shape2d[1]):
-            expand_above_threshold[:, i] = above_threshold[i]
-        expand_above_threshold = expand_above_threshold.reshape(shape)
-        weight = weight.reshape(shape)
-        return torch.from_numpy(expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
-    elif (args.sparsity_type == "column-number"):
-        remain = percent/100
-
-        shape = weight.shape
-        weight2d = weight.reshape(shape[0], -1)
-        shape2d = weight2d.shape
-        percent = 100*(1- (remain/shape2d[1]))
         column_l2_norm = LA.norm(weight2d, 2, axis=0)
         percentile = np.percentile(column_l2_norm, percent)
         under_threshold = column_l2_norm < percentile
@@ -214,127 +159,8 @@ def weight_pruning(args, weight, prune_ratio, cross_x=4, cross_f=1):
         weight = weight.reshape(shape)
         expand_above_threshold = expand_above_threshold.reshape(shape)
         return torch.from_numpy(expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
-    elif (args.sparsity_type == "column-irregular"):
-        column = args.block_column
-        row = args.block_fliter
-        percent = args.block_prune_ratio
-        shape = weight.shape
-        weight2d = weight.reshape(shape[0], -1)
-        shape2d = weight2d.shape
-        column_l2_norm = LA.norm(weight2d, 2, axis=0)
-        sorted_l2_norm = np.argsort(column_l2_norm)
-        remainder = 0 if shape2d[1]<=column else shape2d[1]%column
 
-        pruned_column = sorted_l2_norm[0:remainder]
-        divisible_weight2d = np.delete(weight2d, pruned_column, 1)
-        divisible_shape2d = divisible_weight2d.shape
-        # block_num = 1 if column >= shape2d[1]  else -1
-
-        block_num = (divisible_shape2d[0]*divisible_shape2d[1])/(min(divisible_shape2d[0],row)* min(divisible_shape2d[1],column))
-        block_num = 1 if block_num<=1 else block_num
-        assert block_num%1 == 0
-        divisible_weight2d = divisible_weight2d.reshape(int(block_num), min(row,shape2d[0]), min(column, shape2d[1]) )
-
-        expand_above_threshold = []
-        for index, block in enumerate(divisible_weight2d):
-            block = np.abs(block)
-            percentile = np.percentile(block, percent, axis=1).reshape(-1,1)
-            under_threshold = block <= percentile
-            above_threshold = block > percentile
-            divisible_weight2d[index][under_threshold] = 0
-            expand_above_threshold.append( above_threshold.astype(np.float32))
-        divisible_weight2d = divisible_weight2d.reshape(divisible_shape2d)
-        expand_above_threshold = np.array(expand_above_threshold).reshape(divisible_shape2d)
-        for pcol in np.sort(pruned_column):
-            expand_above_threshold = np.insert(expand_above_threshold, pcol, 0, axis=1)
-            divisible_weight2d = np.insert(divisible_weight2d, pcol, 0, axis=1)
-        weight = divisible_weight2d.reshape(shape)
-        expand_above_threshold = expand_above_threshold.reshape(shape)
-
-        return torch.from_numpy(expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
-
-    elif (args.sparsity_type == "column-irregular-2"):
-        column = args.block_column
-        row = args.block_fliter
-        percent = args.block_prune_ratio
-        shape = weight.shape
-        weight2d = weight.reshape(shape[0], -1)
-        shape2d = weight2d.shape
-        column_l2_norm = LA.norm(weight2d, 2, axis=0)
-        sorted_l2_norm = np.argsort(column_l2_norm)
-        remainder = 0 if shape2d[1]<=column else shape2d[1]%column
-
-        pruned_column = sorted_l2_norm[0:remainder]
-        backup = weight2d[:,pruned_column]
-        divisible_weight2d = np.delete(weight2d, pruned_column, 1)
-        divisible_shape2d = divisible_weight2d.shape
-        # block_num = 1 if column >= shape2d[1]  else -1
-
-        block_num = (divisible_shape2d[0]*divisible_shape2d[1])/(min(divisible_shape2d[0],row)* min(divisible_shape2d[1],column))
-        block_num = 1 if block_num<=1 else block_num
-        assert block_num%1 == 0
-        divisible_weight2d = divisible_weight2d.reshape(int(block_num), min(row,shape2d[0]), min(column, shape2d[1]) )
-
-        expand_above_threshold = []
-        for index, block in enumerate(divisible_weight2d):
-            block = np.abs(block)
-            percentile = np.percentile(block, percent, axis=1).reshape(-1,1)
-            under_threshold = block <= percentile
-            above_threshold = block > percentile
-            divisible_weight2d[index][under_threshold] = 0
-            expand_above_threshold.append( above_threshold.astype(np.float32))
-        divisible_weight2d = divisible_weight2d.reshape(divisible_shape2d)
-        expand_above_threshold = np.array(expand_above_threshold).reshape(divisible_shape2d)
-        for pcol in np.argsort(pruned_column):
-            expand_above_threshold = np.insert(expand_above_threshold, pcol, 1, axis=1)
-            divisible_weight2d = np.insert(divisible_weight2d, pruned_column[pcol], weight2d[:,pruned_column[pcol]], axis=1)
-        weight = divisible_weight2d.reshape(shape)
-        expand_above_threshold = expand_above_threshold.reshape(shape)
-
-        return torch.from_numpy(expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
-
-    elif (args.sparsity_type == "advanced-column-irregular"):
-        column = args.block_column
-        row = args.block_fliter
-        n0column = int(percent/100)
-        percent = args.block_prune_ratio
-        shape = weight.shape
-        weight2d = weight.reshape(shape[0], -1)
-        shape2d = weight2d.shape
-        mask = np.zeros(shape2d, dtype=bool)
-        # n0index = np.where(weight2d.any(axis=0))[0]
-        column_sum = np.sum(np.abs(weight2d), axis=0)
-        n0index = np.argpartition(column_sum, -n0column)[-n0column:]
-        mask[:, n0index] = True
-        n0weight = weight2d[:,n0index]
-        n0weight = np.abs(n0weight)
-        blocked_weight = np.hsplit(n0weight, n0weight.shape[1] / column)
-        blocked_n0index = n0index.reshape(-1,1,column)
-
-        for i in range(n0weight.shape[0]):
-            for index, block in enumerate(blocked_weight):
-                percentile = np.percentile(block[i], percent)
-                conditions = np.where(block[i] <= percentile)[0]
-                pruned_index = blocked_n0index[index][:, conditions]
-                weight2d[i,pruned_index] = 0
-                mask[i,pruned_index] = False
-        weight = weight2d.reshape(shape)
-        expand_above_threshold = mask.reshape(shape)
-
-        return torch.from_numpy(expand_above_threshold).cuda(), torch.from_numpy(weight).cuda()
-    elif (args.sparsity_type == "bn_filter"):
-        ## bn pruning is very similar to bias pruning
-        weight_temp = np.abs(weight)
-        percentile = np.percentile(weight_temp, percent)
-        under_threshold = weight_temp < percentile
-        above_threshold = weight_temp > percentile
-        above_threshold = above_threshold.astype(
-            np.float32)  # has to convert bool to float32 for numpy-tensor conversion
-        weight[under_threshold] = 0
-        return torch.from_numpy(above_threshold).cuda(), torch.from_numpy(weight).cuda()
-
-
-    elif (args.sparsity_type == "block-reorder"):  # xuan shen
+    elif (args.sparsity_type == "block-punched"):  # xuan shen
         shape = weight.shape
         weight2d = weight.reshape(shape[0], -1)
         shape2d = weight2d.shape

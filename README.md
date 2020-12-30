@@ -8,8 +8,7 @@ In Proceeding in AAAI 2021
 
 ![Image of YOLObile](figure/yolo_demo.jpg)
 
-## News!
-On Dec.11, a demo apk (yolo_demo.apk) for Android devices (require Android 10.0) is released.
+
 
 ## Introduction
 The rapid development and wide utilization of object detection techniques have aroused attention on both accuracy and speed of object detectors. However, the current state-of-the-art object detection works are either accuracy-oriented using a large model but leading to high latency
@@ -18,7 +17,7 @@ Under our YOLObile framework, we achieve 17 FPS inference speed using GPU on Sam
 By incorporating our proposed GPU-CPU collaborative scheme, the inference speed is increased to 19.1 FPS, and outperforms the original YOLOv4 by 5x speedup.
 
 ## Environments
-Python 3.7 or later with all `pip install -U -r requirements.txt` packages including `torch >= 1.5`. Docker images come with all dependencies preinstalled. Docker requirements are: 
+Python 3.7 or later with all `pip install -U -r requirements.txt` packages including `torch == 1.4`. Docker images come with all dependencies preinstalled. Docker requirements are: 
 - Nvidia Driver >= 440.44
 - Docker Engine - CE >= 19.03
 
@@ -164,8 +163,13 @@ DONE (t=9.39s).
 
 
 ## Already Known Issues
-When you use multi-card training（4 cards or more ), the training process may stop after a few hours without any errors printed.
+- The accuracy printed in retraining process is not accurate. Please run the test.py individually to check the accuracy. I raised this issue in the old versions of Ultralytics/YOLOv3 repository, and I am not sure if they had already solved yet. 
+
+
+- When you use multi-card training（4 cards or more ), the training process may stop after a few hours without any errors printed.
 I suggest using docker instead if you use 4 cards or more. The docker build instructions can be found above.
+
+- Pytorch 1.5+ might have multi card issues
 
 ## Acknowledgements
 [https://github.com/ultralytics/yolov3](https://github.com/ultralytics/yolov3)

@@ -3,22 +3,22 @@ admm:
 masked-retrain:
   True
 admm-epochs:
-  6
+# select weight positions based on ADMM every 6 epoches
+  1
 rho:
+#rho:
   0.0001
 rho-num:
-  4
+#rho: order of magnitude （from 0.0001 x 1e-1 to 0.0001 x 1e-4)
+  1
 sparsity-type:
-  block-reorder
+# Prune Scheme
+  block-punched
 config-file:
   config_csdarknet53pan_v2
 combine-progressive:
+#  Progressive Pruning. 4x pruning load 2x pruned weight file
   False
 verbose:
+#  Log
   True
-logger:
-  True
-log-interval:
-  10
-no-tricks:
-  False
