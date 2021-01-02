@@ -6,6 +6,10 @@ This is the implementation of [YOLObile: Real-Time Object Detection on Mobile De
 arXiv: [https://arxiv.org/abs/2009.05697](https://arxiv.org/abs/2009.05697)
 In Proceeding in AAAI 2021
 
+**For those who may be interested in the compiler code (How to deploy it onto Android?):** The compiler source code is associated with our collaborator at William & Mary, and has joint IP related stuff. **We have no plans to open source this part now.** Sorry for the inconvenience.
+
+**For IOS developer: ** We only use Android platform to build and test the compiler because of the advantages of highly open source. We also believe the same techniques can be applied on Apple IOS platform, but we haven't tested it yet.
+
 ![Image of YOLObile](figure/yolo_demo.jpg)
 
 
