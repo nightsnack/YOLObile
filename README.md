@@ -38,7 +38,7 @@ The default path for coco data folder is outside the project root folder.
 ```
 
 ### Download Model Checkpoints:
-Google Drive: [Google Drive Download](https://drive.google.com/drive/folders/1FcWdXcWc3vScV-guIrxWsWGhjQwPOEQW?usp=sharing)
+Google Drive: [Google Drive Download](https://drive.google.com/drive/folders/10FRZo9WC1vZA1w6xxysgjptQmbqk3Sz3?usp=sharing)
 
 Baidu Netdisk: [Baidu Netdisk Download](https://pan.baidu.com/s/1FMTOQF6ebH6OJWEAq9F0KQ) code: r3nk
 
